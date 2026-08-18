@@ -27,7 +27,7 @@ interface StudentPortalProps {
   onExamSubmitted: () => void;
 }
 
-type Stage = 'verify' | 'instructions' | 'exam' | 'submitted';
+type Stage = 'verify' | 'seb_check' | 'terms' | 'exam' | 'submitted';
 
 export function StudentPortal({
   students,
@@ -44,6 +44,11 @@ export function StudentPortal({
   const [activeRoom, setActiveRoom] = useState<ExamRoom | null>(null);
   const [roomQuestions, setRoomQuestions] = useState<Question[]>([]);
 
+  // Terms & Conditions Checkbox States
+  const [chkIdentity, setChkIdentity] = useState(false);
+  const [chkMalpractice, setChkMalpractice] = useState(false);
+  const [chkTime, setChkTime] = useState(false);
+
   // Exam state
   const [currentIdx, setCurrentIdx] = useState(0);
   const [selectedAnswers, setSelectedAnswers] = useState<Record<string, number>>({});
@@ -52,6 +57,7 @@ export function StudentPortal({
   const [warningToast, setWarningToast] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [finalScore, setFinalScore] = useState<number | null>(null);
+
   // Strict SEB Detection State
   const isSEBVerified = useMemo(() => {
     const ua = navigator.userAgent;
@@ -139,25 +145,23 @@ export function StudentPortal({
     setRoomQuestions(qList);
     setTimeLeft(remainingSeconds);
 
-    // Proceed to SEB Verification Stage
-    setStage('seb_check');
+    // Proceed to SEB Check / Terms Stage
+    if (isSEBVerified) {
+      setStage('terms');
+    } else {
+      setStage('seb_check');
+    }
   }
 
-  // Auto-launch exam workspace when inside SEB
+  // Auto-transition to Terms when inside SEB
   useEffect(() => {
     if (stage === 'seb_check' && isSEBVerified) {
-      setStage('exam');
-      if (document.documentElement.requestFullscreen) {
-        document.documentElement.requestFullscreen().catch(() => {});
-      }
+      setStage('terms');
     }
   }, [stage, isSEBVerified]);
 
-  // 3. Proctoring Tab-Switch Detection & Copy/Paste Lockdown Hook
+  // Global Copy/Paste & ContextMenu Lockdown Hook (Active across all portal stages)
   useEffect(() => {
-    if (stage !== 'exam') return;
-
-    // Prevent copy, cut, paste, right-click, and text selection
     const preventAction = (e: Event) => {
       e.preventDefault();
       e.stopPropagation();
@@ -182,6 +186,27 @@ export function StudentPortal({
       }
     };
 
+    window.addEventListener('copy', preventAction, true);
+    window.addEventListener('cut', preventAction, true);
+    window.addEventListener('paste', preventAction, true);
+    window.addEventListener('contextmenu', preventAction, true);
+    window.addEventListener('selectstart', preventAction, true);
+    window.addEventListener('keydown', handleKeydown, true);
+
+    return () => {
+      window.removeEventListener('copy', preventAction, true);
+      window.removeEventListener('cut', preventAction, true);
+      window.removeEventListener('paste', preventAction, true);
+      window.removeEventListener('contextmenu', preventAction, true);
+      window.removeEventListener('selectstart', preventAction, true);
+      window.removeEventListener('keydown', handleKeydown, true);
+    };
+  }, []);
+
+  // Tab-Switch Proctoring Telemetry Hook
+  useEffect(() => {
+    if (stage !== 'exam') return;
+
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
         setWarningsCount((prev) => {
@@ -189,7 +214,6 @@ export function StudentPortal({
           const msg = `Warning ${next}/3: Tab switch or window minimization detected!`;
           setWarningToast(msg);
 
-          // Log incident to database
           if (activeStudent && activeRoom) {
             logProctoringIncident({
               event_type: 'tab_switch',
@@ -204,21 +228,8 @@ export function StudentPortal({
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('copy', preventAction, true);
-    window.addEventListener('cut', preventAction, true);
-    window.addEventListener('paste', preventAction, true);
-    window.addEventListener('contextmenu', preventAction, true);
-    window.addEventListener('selectstart', preventAction, true);
-    window.addEventListener('keydown', handleKeydown, true);
-
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('copy', preventAction, true);
-      window.removeEventListener('cut', preventAction, true);
-      window.removeEventListener('paste', preventAction, true);
-      window.removeEventListener('contextmenu', preventAction, true);
-      window.removeEventListener('selectstart', preventAction, true);
-      window.removeEventListener('keydown', handleKeydown, true);
     };
   }, [stage, activeStudent, activeRoom]);
 
@@ -576,6 +587,119 @@ export function StudentPortal({
                 className="flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-white"
               >
                 <ArrowLeft className="h-4 w-4" /> Back to Verification
+              </button>
+            </div>
+          </motion.div>
+        )}
+
+        {/* Stage 2.5: Terms & Conditions & Proctoring Rules Agreement */}
+        {stage === 'terms' && activeStudent && activeRoom && (
+          <motion.div
+            key="terms"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="panel-card mx-auto max-w-xl rounded-2xl p-6 sm:p-8"
+          >
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4 dark:border-zinc-800">
+              <div>
+                <span className="inline-flex items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-300">
+                  <CheckCircle2 className="h-3.5 w-3.5" /> SEB Environment Verified
+                </span>
+                <h3 className="mt-2 text-lg font-bold text-slate-900 dark:text-white">
+                  {activeRoom.title}
+                </h3>
+              </div>
+              <span className="font-mono text-xs font-bold text-slate-500 dark:text-zinc-400">
+                Code: {activeRoom.room_code}
+              </span>
+            </div>
+
+            <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
+              <div className="rounded-xl border border-slate-100 bg-slate-50 p-3 dark:border-zinc-800/80 dark:bg-zinc-950/60">
+                <span className="text-slate-500 dark:text-zinc-400">Student Candidate</span>
+                <p className="mt-0.5 font-bold text-slate-900 dark:text-white">{activeStudent.name}</p>
+                <p className="font-mono text-[11px] text-slate-500 dark:text-zinc-400">SIN: {activeStudent.register_no}</p>
+              </div>
+
+              <div className="rounded-xl border border-slate-100 bg-slate-50 p-3 dark:border-zinc-800/80 dark:bg-zinc-950/60">
+                <span className="text-slate-500 dark:text-zinc-400">Allocated Duration</span>
+                <p className="mt-0.5 font-bold text-slate-900 dark:text-white">{activeRoom.duration_minutes} Minutes</p>
+                <p className="text-[11px] text-slate-500 dark:text-zinc-400">{activeRoom.department} • Y{activeRoom.year} S{activeRoom.semester}</p>
+              </div>
+            </div>
+
+            {/* Terms & Rules Cards */}
+            <div className="mt-5 space-y-3">
+              <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-4 text-xs dark:border-amber-900/60 dark:bg-amber-950/30">
+                <h4 className="flex items-center gap-1.5 font-bold text-amber-900 dark:text-amber-200">
+                  <AlertTriangle className="h-4 w-4 text-amber-600" /> Malpractice & Mark Deduction Policy
+                </h4>
+                <p className="mt-1 text-[11px] text-amber-950 dark:text-amber-300/80">
+                  The automated proctoring telemetry engine monitors tab switches, window minimization, and illegal shortcuts. <strong>Any detected malpractice will be logged and reported directly to department staff, resulting in mark deductions or exam disqualification.</strong>
+                </p>
+              </div>
+
+              {/* Mandatory 3 Checkboxes */}
+              <div className="space-y-2.5 rounded-2xl border border-slate-200/80 bg-slate-50/70 p-4 text-xs dark:border-zinc-800/80 dark:bg-zinc-950/50">
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={chkIdentity}
+                    onChange={(e) => setChkIdentity(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-400 dark:border-zinc-700 dark:bg-pitch-900"
+                  />
+                  <span className="text-slate-700 dark:text-zinc-300">
+                    I confirm that I am the verified candidate (<strong>{activeStudent.name}</strong>) taking this examination under my own identity.
+                  </span>
+                </label>
+
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={chkMalpractice}
+                    onChange={(e) => setChkMalpractice(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-400 dark:border-zinc-700 dark:bg-pitch-900"
+                  />
+                  <span className="text-slate-700 dark:text-zinc-300">
+                    I understand that tab switching, window minimization, or copying will log warnings and staff will reduce my marks accordingly.
+                  </span>
+                </label>
+
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={chkTime}
+                    onChange={(e) => setChkTime(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-400 dark:border-zinc-700 dark:bg-pitch-900"
+                  />
+                  <span className="text-slate-700 dark:text-zinc-300">
+                    I agree to complete and submit all question responses within the allocated duration of <strong>{activeRoom.duration_minutes} minutes</strong>.
+                  </span>
+                </label>
+              </div>
+            </div>
+
+            <div className="mt-6 flex items-center justify-between border-t border-slate-100 pt-4 dark:border-zinc-800">
+              <button
+                onClick={() => setStage('verify')}
+                className="flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-white"
+              >
+                <ArrowLeft className="h-4 w-4" /> Back
+              </button>
+
+              <button
+                disabled={!(chkIdentity && chkMalpractice && chkTime)}
+                onClick={() => {
+                  setStage('exam');
+                  if (document.documentElement.requestFullscreen) {
+                    document.documentElement.requestFullscreen().catch(() => {});
+                  }
+                }}
+                className="flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-xs font-bold text-white shadow-subtle transition hover:bg-slate-800 disabled:opacity-40 active:scale-[0.98] dark:bg-zinc-100 dark:text-black dark:hover:bg-zinc-200"
+              >
+                <Maximize2 className="h-4 w-4 text-emerald-400 dark:text-emerald-600" />
+                <span>Start Examination (Enter Fullscreen)</span>
               </button>
             </div>
           </motion.div>
