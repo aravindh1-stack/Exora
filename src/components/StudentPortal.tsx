@@ -120,9 +120,34 @@ export function StudentPortal({
     setStage('exam');
   }
 
-  // 3. Proctoring Tab-Switch Detection Hook
+  // 3. Proctoring Tab-Switch Detection & Copy/Paste Lockdown Hook
   useEffect(() => {
     if (stage !== 'exam') return;
+
+    // Prevent copy, cut, paste, right-click, and text selection
+    const preventAction = (e: Event) => {
+      e.preventDefault();
+      e.stopPropagation();
+      return false;
+    };
+
+    const handleKeydown = (e: KeyboardEvent) => {
+      // Block Ctrl+C, Ctrl+V, Ctrl+X, Ctrl+U, Ctrl+A, F12
+      if (
+        (e.ctrlKey || e.metaKey) &&
+        ['c', 'v', 'x', 'u', 'a', 'p', 's'].includes(e.key.toLowerCase())
+      ) {
+        e.preventDefault();
+        setWarningToast('Copy / Paste & Shortcuts are strictly disabled!');
+        setTimeout(() => setWarningToast(null), 3000);
+      }
+      if (
+        e.key === 'F12' ||
+        ((e.ctrlKey || e.metaKey) && e.shiftKey && ['i', 'j', 'c'].includes(e.key.toLowerCase()))
+      ) {
+        e.preventDefault();
+      }
+    };
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
@@ -146,8 +171,21 @@ export function StudentPortal({
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('copy', preventAction, true);
+    window.addEventListener('cut', preventAction, true);
+    window.addEventListener('paste', preventAction, true);
+    window.addEventListener('contextmenu', preventAction, true);
+    window.addEventListener('selectstart', preventAction, true);
+    window.addEventListener('keydown', handleKeydown, true);
+
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('copy', preventAction, true);
+      window.removeEventListener('cut', preventAction, true);
+      window.removeEventListener('paste', preventAction, true);
+      window.removeEventListener('contextmenu', preventAction, true);
+      window.removeEventListener('selectstart', preventAction, true);
+      window.removeEventListener('keydown', handleKeydown, true);
     };
   }, [stage, activeStudent, activeRoom]);
 
@@ -436,32 +474,14 @@ export function StudentPortal({
 
                     <button
                       onClick={() => {
-                        const startUrl = window.location.href;
-                        const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>startURL</key>
-    <string>${startUrl}</string>
-    <key>sendURLFilterRules</key>
-    <false/>
-    <key>allowQuit</key>
-    <true/>
-</dict>
-</plist>`;
-                        const blob = new Blob([xml], { type: 'application/seb' });
-                        const url = URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = `Exora_Exam_${activeRoom.room_code}.seb`;
-                        document.body.appendChild(a);
-                        a.click();
-                        document.body.removeChild(a);
-                        URL.revokeObjectURL(url);
+                        const proto = window.location.protocol === 'https:' ? 'sebs:' : 'seb:';
+                        const directUrl = `${proto}//${window.location.host}${window.location.pathname}?mode=student&room=${activeRoom.room_code}`;
+                        window.location.href = directUrl;
                       }}
                       className="flex items-center justify-center gap-1.5 rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white shadow-subtle transition hover:bg-slate-800 dark:bg-zinc-100 dark:text-black dark:hover:bg-zinc-200"
                     >
-                      <span>2. Download SEB Config File (.seb)</span>
+                      <Maximize2 className="h-3.5 w-3.5" />
+                      <span>2. Direct Launch Safe Exam Browser</span>
                     </button>
                   </div>
 
