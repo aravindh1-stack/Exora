@@ -52,6 +52,11 @@ export function StudentPortal({
   const [warningToast, setWarningToast] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [finalScore, setFinalScore] = useState<number | null>(null);
+  // Strict SEB Detection State
+  const isSEBVerified = useMemo(() => {
+    const ua = navigator.userAgent;
+    return ua.includes('SEB') || ua.includes('SafeExamBrowser');
+  }, []);
 
   // 1. Candidate Verification & Stage Transition Handler
   function handleVerifyCandidate() {
@@ -306,11 +311,7 @@ export function StudentPortal({
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   }, [timeLeft]);
 
-  // Strict SEB Detection State
-  const isSEBVerified = useMemo(() => {
-    const ua = navigator.userAgent;
-    return ua.includes('SEB') || ua.includes('SafeExamBrowser');
-  }, []);
+
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:py-12">
