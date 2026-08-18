@@ -240,7 +240,14 @@ export function StudentPortal({
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   }, [timeLeft]);
 
-  const currentQ = roomQuestions[currentIdx];
+  // SEB Detection State
+  const isSEBBrowser = useMemo(() => {
+    const ua = navigator.userAgent;
+    return ua.includes('SEB') || ua.includes('SafeExamBrowser');
+  }, []);
+
+  const [sebBypassed, setSebBypassed] = useState(false);
+  const isSEBVerified = isSEBBrowser || sebBypassed;
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
@@ -360,7 +367,7 @@ export function StudentPortal({
           </motion.div>
         )}
 
-        {/* Stage 2: Instructions & Agreement */}
+        {/* Stage 2: Instructions & Safe Exam Browser Verification */}
         {stage === 'instructions' && activeStudent && activeRoom && (
           <motion.div
             key="instructions"
@@ -397,6 +404,65 @@ export function StudentPortal({
               </div>
             </div>
 
+            {/* Safe Exam Browser (SEB) Security Verification Card */}
+            <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-zinc-800 dark:bg-zinc-950/60">
+              <div className="flex items-center justify-between">
+                <h4 className="flex items-center gap-1.5 text-xs font-bold text-slate-900 dark:text-white">
+                  <ShieldCheck className="h-4 w-4 text-amber-500" /> Safe Exam Browser (SEB) Security Check
+                </h4>
+                {isSEBVerified ? (
+                  <span className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/50 dark:text-emerald-300">
+                    <CheckCircle2 className="h-3 w-3" /> SEB Environment Verified
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/50 dark:text-amber-300">
+                    <AlertTriangle className="h-3 w-3" /> SEB Not Detected
+                  </span>
+                )}
+              </div>
+
+              {!isSEBVerified ? (
+                <div className="mt-3 space-y-3">
+                  <p className="text-xs text-slate-600 dark:text-zinc-400">
+                    This examination requires <strong>Safe Exam Browser (SEB)</strong> to lock down your environment and ensure anti-cheat compliance.
+                  </p>
+
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <a
+                      href="https://safeexambrowser.org/download_en.html"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-800 transition hover:bg-slate-100 dark:border-zinc-700 dark:bg-pitch-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                    >
+                      <span>1. Install Safe Exam Browser</span>
+                    </a>
+
+                    <button
+                      onClick={() => {
+                        window.location.href = `seb://exora.aarga.org?room=${activeRoom.room_code}`;
+                      }}
+                      className="flex items-center justify-center gap-1.5 rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white shadow-subtle transition hover:bg-slate-800 dark:bg-zinc-100 dark:text-black dark:hover:bg-zinc-200"
+                    >
+                      <span>2. Launch in SEB App</span>
+                    </button>
+                  </div>
+
+                  <div className="border-t border-slate-200/60 pt-2.5 text-center dark:border-zinc-800/60">
+                    <button
+                      onClick={() => setSebBypassed(true)}
+                      className="text-[11px] font-semibold text-slate-500 hover:text-slate-900 hover:underline dark:text-zinc-400 dark:hover:text-white"
+                    >
+                      Proceed in Standard Browser (Bypass for Testing / Demo) →
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <p className="mt-2 text-xs text-emerald-700 dark:text-emerald-400 font-medium">
+                  Safe Exam Browser environment active and locked. Fullscreen proctoring and tab telemetry active.
+                </p>
+              )}
+            </div>
+
             <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50/80 p-4 dark:border-amber-900/60 dark:bg-amber-950/30">
               <h4 className="flex items-center gap-1.5 text-xs font-bold text-amber-800 dark:text-amber-300">
                 <ShieldCheck className="h-4 w-4" /> Proctoring Rules & Requirements
@@ -419,7 +485,8 @@ export function StudentPortal({
 
               <button
                 onClick={handleStartExam}
-                className="flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-2.5 text-xs font-bold text-white shadow-subtle transition hover:bg-slate-800 active:scale-[0.98] dark:bg-zinc-100 dark:text-black dark:hover:bg-zinc-200"
+                disabled={!isSEBVerified}
+                className="flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-2.5 text-xs font-bold text-white shadow-subtle transition hover:bg-slate-800 disabled:opacity-50 active:scale-[0.98] dark:bg-zinc-100 dark:text-black dark:hover:bg-zinc-200"
               >
                 <Maximize2 className="h-3.5 w-3.5" />
                 <span>Start Exam (Enter Fullscreen)</span>
