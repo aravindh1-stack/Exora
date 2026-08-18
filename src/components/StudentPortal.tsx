@@ -54,7 +54,7 @@ export function StudentPortal({
   const [submitting, setSubmitting] = useState(false);
   const [finalScore, setFinalScore] = useState<number | null>(null);
 
-  // 1. Candidate Direct Verification & Persistent Re-entry Handler
+  // 1. Candidate Verification & Stage Transition Handler
   function handleVerifyCandidate() {
     setVerifyError(null);
     const reg = registerNo.trim();
@@ -98,14 +98,6 @@ export function StudentPortal({
       return;
     }
 
-    // Strict SEB Requirement Check
-    if (!isSEBVerified) {
-      setVerifyError(
-        'Safe Exam Browser (SEB) environment required! Please launch this page inside Safe Exam Browser to proceed.',
-      );
-      return;
-    }
-
     // Check if student already completed this exam
     if (studentMatch.status === 'completed' || studentMatch.status === 'flagged') {
       setVerifyError('You have already submitted this examination session.');
@@ -143,12 +135,19 @@ export function StudentPortal({
     setRoomQuestions(qList);
     setTimeLeft(remainingSeconds);
 
-    // Direct launch into exam workspace
-    setStage('exam');
-    if (document.documentElement.requestFullscreen) {
-      document.documentElement.requestFullscreen().catch(() => {});
-    }
+    // Proceed to SEB Verification Stage
+    setStage('seb_check');
   }
+
+  // Auto-launch exam workspace when inside SEB
+  useEffect(() => {
+    if (stage === 'seb_check' && isSEBVerified) {
+      setStage('exam');
+      if (document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      }
+    }
+  }, [stage, isSEBVerified]);
 
   // 3. Proctoring Tab-Switch Detection & Copy/Paste Lockdown Hook
   useEffect(() => {
@@ -432,10 +431,10 @@ export function StudentPortal({
           </motion.div>
         )}
 
-        {/* Stage 2: Instructions & Safe Exam Browser Verification */}
-        {stage === 'instructions' && activeStudent && activeRoom && (
+        {/* Stage 2: Safe Exam Browser (SEB) Launcher Screen */}
+        {stage === 'seb_check' && activeStudent && activeRoom && (
           <motion.div
-            key="instructions"
+            key="seb_check"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
@@ -444,7 +443,7 @@ export function StudentPortal({
             <div className="flex items-center justify-between border-b border-slate-100 pb-4 dark:border-zinc-800">
               <div>
                 <span className="inline-flex items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-300">
-                  <CheckCircle2 className="h-3.5 w-3.5" /> Eligible Candidate Verified
+                  <CheckCircle2 className="h-3.5 w-3.5" /> Candidate Identity Verified
                 </span>
                 <h3 className="mt-2 text-lg font-bold text-slate-900 dark:text-white">
                   {activeRoom.title}
@@ -469,75 +468,41 @@ export function StudentPortal({
               </div>
             </div>
 
-            {/* Safe Exam Browser (SEB) Security Verification Card */}
-            <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-zinc-800 dark:bg-zinc-950/60">
-              <div className="flex items-center justify-between">
-                <h4 className="flex items-center gap-1.5 text-xs font-bold text-slate-900 dark:text-white">
-                  <ShieldCheck className="h-4 w-4 text-amber-500" /> Safe Exam Browser (SEB) Security Check
+            {/* Safe Exam Browser (SEB) Launch Card */}
+            <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50/70 p-5 dark:border-amber-900/60 dark:bg-amber-950/30">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                <h4 className="text-sm font-bold text-amber-900 dark:text-amber-200">
+                  Safe Exam Browser (SEB) Required
                 </h4>
-                {isSEBVerified ? (
-                  <span className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/50 dark:text-emerald-300">
-                    <CheckCircle2 className="h-3 w-3" /> SEB Environment Verified
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/50 dark:text-amber-300">
-                    <AlertTriangle className="h-3 w-3" /> SEB Not Detected
-                  </span>
-                )}
               </div>
 
-              {!isSEBVerified ? (
-                <div className="mt-3 space-y-3">
-                  <p className="text-xs text-slate-600 dark:text-zinc-400">
-                    This examination requires <strong>Safe Exam Browser (SEB)</strong> to lock down your environment and ensure anti-cheat compliance.
-                  </p>
+              <p className="mt-2 text-xs text-amber-950 dark:text-amber-300/80">
+                To guarantee exam integrity, this exam must be taken inside <strong>Safe Exam Browser</strong>. Please download SEB if not installed, or launch SEB directly below.
+              </p>
 
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    <a
-                      href="https://safeexambrowser.org/download_en.html"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-800 transition hover:bg-slate-100 dark:border-zinc-700 dark:bg-pitch-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
-                    >
-                      <span>1. Install Safe Exam Browser</span>
-                    </a>
+              <div className="mt-4 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+                <a
+                  href="https://safeexambrowser.org/download_en.html"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-1.5 rounded-xl border border-amber-300 bg-white px-3.5 py-3 text-xs font-bold text-slate-800 transition hover:bg-slate-50 dark:border-amber-800 dark:bg-pitch-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                >
+                  <span>1. Install Safe Exam Browser</span>
+                </a>
 
-                    <button
-                      onClick={() => {
-                        const proto = window.location.protocol === 'https:' ? 'sebs:' : 'seb:';
-                        const directUrl = `${proto}//${window.location.host}${window.location.pathname}?mode=student&room=${activeRoom.room_code}`;
-                        window.location.href = directUrl;
-                      }}
-                      className="flex items-center justify-center gap-1.5 rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white shadow-subtle transition hover:bg-slate-800 dark:bg-zinc-100 dark:text-black dark:hover:bg-zinc-200"
-                    >
-                      <Maximize2 className="h-3.5 w-3.5" />
-                      <span>2. Direct Launch Safe Exam Browser</span>
-                    </button>
-                  </div>
-
-                  <div className="border-t border-slate-200/60 pt-2.5 text-center dark:border-zinc-800/60">
-                    <span className="text-[11px] font-medium text-slate-500 dark:text-zinc-400">
-                      💡 Tip: Download and open the <strong>.seb</strong> config file to launch Safe Exam Browser automatically.
-                    </span>
-                  </div>
-                </div>
-              ) : (
-                <p className="mt-2 text-xs text-emerald-700 dark:text-emerald-400 font-medium">
-                  Safe Exam Browser environment active and locked. Fullscreen proctoring and tab telemetry active.
-                </p>
-              )}
-            </div>
-
-            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50/80 p-4 dark:border-amber-900/60 dark:bg-amber-950/30">
-              <h4 className="flex items-center gap-1.5 text-xs font-bold text-amber-800 dark:text-amber-300">
-                <ShieldCheck className="h-4 w-4" /> Proctoring Rules & Requirements
-              </h4>
-              <ul className="mt-2 space-y-1.5 text-xs text-amber-950 dark:text-amber-200/80">
-                <li>• Fullscreen mode will be requested upon starting the exam.</li>
-                <li>• Do not switch tabs or minimize the browser window.</li>
-                <li>• Tab switches trigger automated proctoring alerts and malpractice flags after 3 warnings.</li>
-                <li>• Your exam will auto-submit when the duration of <strong>{activeRoom.duration_minutes} minutes</strong> expires.</li>
-              </ul>
+                <button
+                  onClick={() => {
+                    const proto = window.location.protocol === 'https:' ? 'sebs:' : 'seb:';
+                    const directUrl = `${proto}//${window.location.host}${window.location.pathname}?mode=student&room=${activeRoom.room_code}`;
+                    window.location.href = directUrl;
+                  }}
+                  className="flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-3.5 py-3 text-xs font-bold text-white shadow-subtle transition hover:bg-slate-800 dark:bg-zinc-100 dark:text-black dark:hover:bg-zinc-200"
+                >
+                  <Maximize2 className="h-4 w-4" />
+                  <span>2. Launch Safe Exam Browser</span>
+                </button>
+              </div>
             </div>
 
             <div className="mt-6 flex items-center justify-between border-t border-slate-100 pt-4 dark:border-zinc-800">
@@ -545,16 +510,7 @@ export function StudentPortal({
                 onClick={() => setStage('verify')}
                 className="flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-white"
               >
-                <ArrowLeft className="h-4 w-4" /> Back
-              </button>
-
-              <button
-                onClick={handleStartExam}
-                disabled={!isSEBVerified}
-                className="flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-2.5 text-xs font-bold text-white shadow-subtle transition hover:bg-slate-800 disabled:opacity-50 active:scale-[0.98] dark:bg-zinc-100 dark:text-black dark:hover:bg-zinc-200"
-              >
-                <Maximize2 className="h-3.5 w-3.5" />
-                <span>Start Exam (Enter Fullscreen)</span>
+                <ArrowLeft className="h-4 w-4" /> Back to Verification
               </button>
             </div>
           </motion.div>
