@@ -706,7 +706,7 @@ export function StudentPortal({
         )}
 
         {/* Stage 3: Live Exam Workspace */}
-        {stage === 'exam' && activeRoom && currentQ && (
+        {stage === 'exam' && activeRoom && (
           <motion.div
             key="exam"
             initial={{ opacity: 0 }}
@@ -727,7 +727,31 @@ export function StudentPortal({
               </motion.div>
             )}
 
-            {/* Exam Header */}
+            {!currentQ ? (
+              <div className="panel-card mx-auto max-w-md rounded-2xl p-6 text-center sm:p-8">
+                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-50 text-amber-600 dark:bg-amber-950/50 dark:text-amber-400">
+                  <AlertCircle className="h-7 w-7" />
+                </div>
+                <h3 className="mt-4 text-lg font-bold text-slate-900 dark:text-white">
+                  No Questions Added Yet
+                </h3>
+                <p className="mt-1.5 text-xs text-slate-500 dark:text-zinc-400">
+                  This exam room (<strong>{activeRoom.title}</strong>) does not have any questions assigned yet. Please inform your instructor or department admin to add questions to room <code>{activeRoom.room_code}</code>.
+                </p>
+                <button
+                  onClick={() => {
+                    setStage('verify');
+                    setActiveStudent(null);
+                    setActiveRoom(null);
+                  }}
+                  className="mt-6 w-full rounded-xl bg-slate-900 py-3 text-xs font-bold text-white shadow-subtle transition hover:bg-slate-800 dark:bg-zinc-100 dark:text-black dark:hover:bg-zinc-200"
+                >
+                  Return to Student Portal Login
+                </button>
+              </div>
+            ) : (
+              <>
+                {/* Exam Header */}
             <div className="panel-card flex flex-col gap-3 rounded-2xl p-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h3 className="text-sm font-bold text-slate-900 dark:text-white">{activeRoom.title}</h3>
@@ -904,6 +928,8 @@ export function StudentPortal({
                 </div>
               </div>
             </div>
+            </>
+            )}
           </motion.div>
         )}
 
