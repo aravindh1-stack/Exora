@@ -1,0 +1,41 @@
+import { useState, useEffect, useCallback } from 'react';
+import type { StudentWithSession, ExamRoom, Question } from '@/lib/types';
+import { StudentPortal } from '@/components/StudentPortal';
+import { fetchQuestions, fetchStudentsWithSessions, fetchExamRooms } from '@/lib/queries';
+
+export function StudentApp() {
+  const [students, setStudents] = useState<StudentWithSession[]>([]);
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [rooms, setRooms] = useState<ExamRoom[]>([]);
+
+  const loadData = useCallback(async () => {
+    try {
+      const [sData, qData, rData] = await Promise.all([
+        fetchStudentsWithSessions(),
+        fetchQuestions(),
+        fetchExamRooms(),
+      ]);
+      setStudents(sData);
+      setQuestions(qData);
+      setRooms(rData);
+    } catch (e) {
+      console.error('Failed to load student portal data', e);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  return (
+    <div className="relative min-h-screen bg-slate-50 text-slate-900 transition-colors duration-200 dark:bg-black dark:text-zinc-100">
+      <div className="pointer-events-none fixed inset-0 bg-grid-light bg-grid opacity-60 dark:bg-grid-dark dark:opacity-30" />
+      <StudentPortal
+        students={students}
+        rooms={rooms}
+        questions={questions}
+        onExamSubmitted={loadData}
+      />
+    </div>
+  );
+}
