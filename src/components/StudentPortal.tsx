@@ -128,11 +128,18 @@ export function StudentPortal({
   const [submitting, setSubmitting] = useState(false);
   const [finalScore, setFinalScore] = useState<number | null>(null);
 
+  // Derived current question (safeguarded against empty/undefined arrays)
+  const currentQ = useMemo(() => {
+    if (!roomQuestions || roomQuestions.length === 0) return null;
+    return roomQuestions[currentIdx] || roomQuestions[0] || null;
+  }, [roomQuestions, currentIdx]);
+
   // Strict SEB Detection State
   const isSEBVerified = useMemo(() => {
     const ua = navigator.userAgent;
     return ua.includes('SEB') || ua.includes('SafeExamBrowser');
   }, []);
+
 
   // Restore State from URL query parameters or safeStorage (Handles SEB page reloads cleanly)
   useEffect(() => {
@@ -234,10 +241,15 @@ export function StudentPortal({
       }
 
       if (urlStage) {
-        setStage(urlStage);
+        if (loading && urlStage === 'exam') {
+          setStage('terms');
+        } else {
+          setStage(urlStage);
+        }
       }
     }
-  }, [students, rooms, questions]);
+  }, [students, rooms, questions, loading]);
+
 
   // 1. Candidate Verification & Stage Transition Handler
   function handleVerifyCandidate() {
@@ -947,51 +959,32 @@ export function StudentPortal({
                 <ArrowLeft className="h-4 w-4" /> Back
               </button>
 
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  disabled={!(chkIdentity && chkMalpractice && chkTime)}
-                  onClick={() => {
-                    if (!activeStudent || !activeRoom) return;
-                    safeStorage.setItem('exora_session_stage', 'exam');
-                    const url = new URL(window.location.href);
-                    url.searchParams.set('mode', 'student');
-                    url.searchParams.set('stage', 'exam');
-                    url.searchParams.set('reg', activeStudent.register_no);
-                    url.searchParams.set('room', activeRoom.room_code);
-                    window.location.href = url.toString();
-                  }}
-                  className="flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3.5 py-3 text-xs font-bold text-slate-800 transition hover:bg-slate-50 disabled:opacity-40 dark:border-zinc-700 dark:bg-pitch-900 dark:text-zinc-200"
-                  title="Reload page to force SEB engine top-level document loading"
-                >
-                  <span>Full Page SEB Reload</span>
-                </button>
+              <button
+                disabled={!(chkIdentity && chkMalpractice && chkTime)}
+                onClick={() => {
+                  if (!activeStudent || !activeRoom) return;
+                  safeStorage.setItem('exora_session_stage', 'exam');
+                  const url = new URL(window.location.href);
+                  url.searchParams.set('mode', 'student');
+                  url.searchParams.set('stage', 'exam');
+                  url.searchParams.set('reg', activeStudent.register_no);
+                  url.searchParams.set('room', activeRoom.room_code);
+                  window.history.replaceState({}, '', url.toString());
+                  setStage('exam');
+                  setTimeout(() => {
+                    try {
+                      if (document.documentElement.requestFullscreen) {
+                        document.documentElement.requestFullscreen().catch(() => {});
+                      }
+                    } catch (e) {}
+                  }, 100);
+                }}
+                className="flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-xs font-bold text-white shadow-subtle transition hover:bg-slate-800 disabled:opacity-40 active:scale-[0.98] dark:bg-zinc-100 dark:text-black dark:hover:bg-zinc-200"
+              >
+                <Maximize2 className="h-4 w-4 text-emerald-400 dark:text-emerald-600" />
+                <span>Start Examination (Enter Fullscreen)</span>
+              </button>
 
-                <button
-                  disabled={!(chkIdentity && chkMalpractice && chkTime)}
-                  onClick={() => {
-                    if (!activeStudent || !activeRoom) return;
-                    safeStorage.setItem('exora_session_stage', 'exam');
-                    const url = new URL(window.location.href);
-                    url.searchParams.set('mode', 'student');
-                    url.searchParams.set('stage', 'exam');
-                    url.searchParams.set('reg', activeStudent.register_no);
-                    url.searchParams.set('room', activeRoom.room_code);
-                    window.history.replaceState({}, '', url.toString());
-                    setStage('exam');
-                    setTimeout(() => {
-                      try {
-                        if (document.documentElement.requestFullscreen) {
-                          document.documentElement.requestFullscreen().catch(() => {});
-                        }
-                      } catch (e) {}
-                    }, 100);
-                  }}
-                  className="flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-xs font-bold text-white shadow-subtle transition hover:bg-slate-800 disabled:opacity-40 active:scale-[0.98] dark:bg-zinc-100 dark:text-black dark:hover:bg-zinc-200"
-                >
-                  <Maximize2 className="h-4 w-4 text-emerald-400 dark:text-emerald-600" />
-                  <span>Start Examination (Enter Fullscreen)</span>
-                </button>
-              </div>
             </div>
 
           </motion.div>

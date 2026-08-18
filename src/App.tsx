@@ -9,7 +9,9 @@ import { Students } from '@/components/Students';
 import { Rooms } from '@/components/Rooms';
 import { StudentPortal } from '@/components/StudentPortal';
 import { AdminLogin } from '@/components/AdminLogin';
+import { PortalErrorBoundary } from '@/components/PortalErrorBoundary';
 import { fetchQuestions, fetchStudentsWithSessions, fetchExamRooms } from '@/lib/queries';
+
 
 import { safeStorage } from '@/lib/storage';
 
@@ -97,18 +99,21 @@ function App() {
     return (
       <div className="relative min-h-screen bg-slate-50 text-slate-900 transition-colors duration-200 dark:bg-black dark:text-zinc-100">
         <div className="pointer-events-none fixed inset-0 bg-grid-light bg-grid opacity-60 dark:bg-grid-dark dark:opacity-30" />
-        <StudentPortal
-          students={students}
-          rooms={rooms}
-          questions={questions}
-          onExamSubmitted={loadAllData}
-          apiError={appApiError}
-          onRetryFetch={loadAllData}
-          loading={loadingStudents || loadingQuestions || loadingRooms}
-        />
+        <PortalErrorBoundary>
+          <StudentPortal
+            students={students}
+            rooms={rooms}
+            questions={questions}
+            onExamSubmitted={loadAllData}
+            apiError={appApiError}
+            onRetryFetch={loadAllData}
+            loading={loadingStudents || loadingQuestions || loadingRooms}
+          />
+        </PortalErrorBoundary>
       </div>
     );
   }
+
 
 
   return (
