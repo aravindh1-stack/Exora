@@ -14,6 +14,7 @@ import {
   AlertCircle,
   Maximize2,
   Check,
+  LogOut,
 } from 'lucide-react';
 import type { StudentWithSession, ExamRoom, Question } from '@/lib/types';
 import { matchStudentToRoom } from './Rooms';
@@ -53,7 +54,7 @@ export function StudentPortal({
   const [submitting, setSubmitting] = useState(false);
   const [finalScore, setFinalScore] = useState<number | null>(null);
 
-  // 1. Candidate Verification Handler
+  // 1. Candidate Direct Verification & Persistent Re-entry Handler
   function handleVerifyCandidate() {
     setVerifyError(null);
     const reg = registerNo.trim();
@@ -97,27 +98,56 @@ export function StudentPortal({
       return;
     }
 
+    // Strict SEB Requirement Check
+    if (!isSEBVerified) {
+      setVerifyError(
+        'Safe Exam Browser (SEB) environment required! Please launch this page inside Safe Exam Browser to proceed.',
+      );
+      return;
+    }
+
+    // Check if student already completed this exam
+    if (studentMatch.status === 'completed' || studentMatch.status === 'flagged') {
+      setVerifyError('You have already submitted this examination session.');
+      return;
+    }
+
     // Get questions for this room
     let qList = questions.filter((q) => q.room_id === roomMatch.id);
     if (qList.length === 0) {
-      // Fallback: If no room-specific questions created yet, fetch general questions
       qList = questions.slice(0, 10);
+    }
+
+    // Persistent Timer Calculation (handles exit & 2 min re-entry seamlessly)
+    const storageKey = `exora_start_${studentMatch.id}_${roomMatch.id}`;
+    const existingStart = localStorage.getItem(storageKey);
+    let startTimestamp = Date.now();
+
+    if (existingStart) {
+      startTimestamp = Number(existingStart);
+    } else {
+      localStorage.setItem(storageKey, String(startTimestamp));
+    }
+
+    const elapsedSeconds = Math.floor((Date.now() - startTimestamp) / 1000);
+    const totalSeconds = roomMatch.duration_minutes * 60;
+    const remainingSeconds = totalSeconds - elapsedSeconds;
+
+    if (remainingSeconds <= 0) {
+      setVerifyError('Exam time limit has expired for your session.');
+      return;
     }
 
     setActiveStudent(studentMatch);
     setActiveRoom(roomMatch);
     setRoomQuestions(qList);
-    setTimeLeft(roomMatch.duration_minutes * 60);
-    setStage('instructions');
-  }
+    setTimeLeft(remainingSeconds);
 
-  // 2. Start Exam Handler
-  function handleStartExam() {
-    // Attempt fullscreen mode
+    // Direct launch into exam workspace
+    setStage('exam');
     if (document.documentElement.requestFullscreen) {
       document.documentElement.requestFullscreen().catch(() => {});
     }
-    setStage('exam');
   }
 
   // 3. Proctoring Tab-Switch Detection & Copy/Paste Lockdown Hook
@@ -575,6 +605,25 @@ export function StudentPortal({
                   <Clock className="h-4 w-4 text-amber-500" />
                   <span>{formattedTime}</span>
                 </div>
+
+                {/* Exit Exam Button */}
+                <button
+                  onClick={() => {
+                    const confirmExit = window.confirm(
+                      'Are you sure you want to Exit Exam? Your timer will continue running in the background until time expires.',
+                    );
+                    if (confirmExit) {
+                      setStage('verify');
+                      setActiveStudent(null);
+                      setActiveRoom(null);
+                    }
+                  }}
+                  className="flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-xs font-bold text-rose-700 hover:bg-rose-100 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-300"
+                  title="Exit Examination"
+                >
+                  <LogOut className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Exit Exam</span>
+                </button>
               </div>
             </div>
 
