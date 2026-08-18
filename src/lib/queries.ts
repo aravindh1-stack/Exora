@@ -240,12 +240,51 @@ export function matchStudentToRoom(student: StudentWithSession, room: ExamRoom):
   const sSem = Number(student.semester) || 1;
   const rSem = Number(room.semester);
 
-  const deptMatches = sDept === rDept || sDept.includes(rDept) || rDept.includes(sDept);
-  const yrMatches = sYr === rYr;
-  const semMatches = sSem === rSem;
-
   return deptMatches && yrMatches && semMatches;
 }
+
+export interface ExamResponseDetail {
+
+  id: string;
+  session_id: string;
+  question_id: string;
+  selected_index: number;
+  is_correct: boolean;
+  question?: Question;
+}
+
+export async function fetchStudentResponses(sessionId: string): Promise<ExamResponseDetail[]> {
+  if (!sessionId) return [];
+
+  try {
+    const { data: responses, error } = await supabase
+      .from('exam_responses')
+      .select('*')
+      .eq('session_id', sessionId);
+
+    if (error || !responses || responses.length === 0) {
+      return [];
+    }
+
+    const qIds = responses.map((r) => r.question_id);
+    const { data: qData } = await supabase
+      .from('questions')
+      .select('*')
+      .in('id', qIds);
+
+    const qMap = new Map<string, Question>();
+    (qData || []).forEach((q) => qMap.set(q.id, q));
+
+    return responses.map((r) => ({
+      ...r,
+      question: qMap.get(r.question_id),
+    }));
+  } catch (err) {
+    console.error('Error fetching student exam responses:', err);
+    return [];
+  }
+}
+
 
 
 

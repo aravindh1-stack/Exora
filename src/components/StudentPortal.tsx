@@ -303,28 +303,18 @@ export function StudentPortal({
     const normReg = normalizeCode(reg);
     const normCode = normalizeCode(code);
 
-    // Match Room (Exact or Normalized or Dynamic Fallback Room)
-    let roomMatch = rooms.find(
+    // Strict Room Code Verification against database
+    const roomMatch = rooms.find(
       (r) =>
         r.room_code.toLowerCase() === code.toLowerCase() ||
-        normalizeCode(r.room_code) === normCode ||
-        normalizeCode(r.room_code).includes(normCode) ||
-        normCode.includes(normalizeCode(r.room_code)),
+        normalizeCode(r.room_code) === normCode,
     );
 
     if (!roomMatch) {
-      roomMatch = {
-        id: `auto-room-${normCode}`,
-        title: `Exam Room (${code.toUpperCase()})`,
-        room_code: code.toUpperCase(),
-        department: 'Electronics & Communication',
-        year: 3,
-        semester: 5,
-        duration_minutes: 60,
-        status: 'active',
-        created_at: new Date().toISOString(),
-      };
+      setVerifyError(`Invalid Exam Room Code: Access code "${code}" does not exist in the active room database.`);
+      return;
     }
+
 
     // Match Student (Exact or Normalized or Auto-Provision Candidate)
     let studentMatch = students.find(
@@ -564,6 +554,16 @@ export function StudentPortal({
           answers: answerPayload,
         });
 
+        // Clear active session keys from safeStorage & URL
+        safeStorage.removeItem('exora_session_stage');
+        safeStorage.removeItem('exora_session_reg');
+        safeStorage.removeItem('exora_session_room');
+        const url = new URL(window.location.href);
+        url.searchParams.delete('stage');
+        url.searchParams.delete('reg');
+        url.searchParams.delete('room');
+        window.history.replaceState({}, '', url.toString());
+
         setFinalScore(pct);
         setStage('submitted');
         onExamSubmitted();
@@ -571,6 +571,7 @@ export function StudentPortal({
         if (document.exitFullscreen) {
           document.exitFullscreen().catch(() => {});
         }
+
       } catch (e) {
         console.error('Failed to submit exam session', e);
       } finally {
@@ -1265,44 +1266,98 @@ export function StudentPortal({
               </div>
 
 
-              {/* Question Palette Sidebar */}
-              <div className="panel-card rounded-2xl p-5">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400">
-                  Question Palette
-                </h4>
-                <div className="mt-3 grid grid-cols-5 gap-2">
-                  {roomQuestions.map((q, idx) => {
-                    const isAnswered = selectedAnswers[q.id] !== undefined;
-                    const isCurrent = idx === currentIdx;
-                    return (
-                      <button
-                        key={q.id}
-                        onClick={() => setCurrentIdx(idx)}
-                        className={`flex h-9 w-9 items-center justify-center rounded-lg font-mono text-xs font-bold transition ${
-                          isCurrent
-                            ? 'border-2 border-slate-900 bg-slate-900 text-white dark:border-white dark:bg-zinc-100 dark:text-black'
-                            : isAnswered
-                              ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
-                              : 'bg-slate-100 text-slate-500 dark:bg-zinc-900 dark:text-zinc-500'
-                        }`}
-                      >
-                        {idx + 1}
-                      </button>
-                    );
-                  })}
+              {/* Redesigned Exam Sidebar Panel */}
+              <div className="panel-card flex flex-col justify-between rounded-2xl p-5 space-y-6">
+                <div>
+                  {/* 1. Live Countdown Timer Card */}
+                  <div className="rounded-2xl border border-amber-200/80 bg-amber-50/70 p-4 text-center dark:border-amber-900/50 dark:bg-amber-950/30">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-amber-800 dark:text-amber-300 flex items-center justify-center gap-1.5">
+                      <Clock className="h-3.5 w-3.5 text-amber-500 animate-pulse" /> Time Remaining
+                    </span>
+                    <p className="mt-1 font-mono text-2xl font-black tracking-tight text-slate-900 dark:text-white">
+                      {formattedTime}
+                    </p>
+                  </div>
+
+                  {/* 2. Question Palette */}
+                  <div className="mt-5">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-600 dark:text-zinc-400">
+                        Question Palette
+                      </h4>
+                      <span className="text-[11px] font-semibold text-slate-400 dark:text-zinc-500">
+                        {Object.keys(selectedAnswers).length} / {roomQuestions.length}
+                      </span>
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-5 gap-2">
+                      {roomQuestions.map((q, idx) => {
+                        const isAnswered = selectedAnswers[q.id] !== undefined;
+                        const isCurrent = idx === currentIdx;
+                        return (
+                          <button
+                            key={q.id}
+                            onClick={() => setCurrentIdx(idx)}
+                            className={`flex h-9 w-9 items-center justify-center rounded-xl font-mono text-xs font-bold transition shadow-sm ${
+                              isCurrent
+                                ? 'ring-2 ring-indigo-500 ring-offset-2 bg-slate-900 text-white dark:bg-zinc-100 dark:text-black dark:ring-offset-black'
+                                : isAnswered
+                                  ? 'bg-emerald-500 text-white shadow-emerald-500/20'
+                                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800'
+                            }`}
+                          >
+                            {idx + 1}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Status Legend */}
+                    <div className="mt-5 space-y-2 border-t border-slate-100 pt-3 text-[11px] font-semibold text-slate-500 dark:border-zinc-800 dark:text-zinc-400">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="h-3 w-3 rounded-full bg-emerald-500" />
+                          <span>Answered</span>
+                        </div>
+                        <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                          {Object.keys(selectedAnswers).length}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="h-3 w-3 rounded-full bg-slate-200 dark:bg-zinc-800" />
+                          <span>Unanswered / Skipped</span>
+                        </div>
+                        <span className="font-mono font-bold text-slate-500 dark:text-zinc-400">
+                          {Math.max(0, roomQuestions.length - Object.keys(selectedAnswers).length)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
-                <div className="mt-6 space-y-2 border-t border-slate-100 pt-3 text-[11px] text-slate-500 dark:border-zinc-800 dark:text-zinc-400">
-                  <div className="flex items-center gap-2">
-                    <span className="h-3 w-3 rounded bg-emerald-100 dark:bg-emerald-950/60" />
-                    <span>Answered ({Object.keys(selectedAnswers).length})</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="h-3 w-3 rounded bg-slate-100 dark:bg-zinc-900" />
-                    <span>Unanswered ({roomQuestions.length - Object.keys(selectedAnswers).length})</span>
-                  </div>
+                {/* 3. Prominent Finish Exam Button in Sidebar */}
+                <div className="border-t border-slate-100 pt-4 dark:border-zinc-800">
+                  <button
+                    onClick={confirmAndFinishExam}
+                    disabled={submitting}
+                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 py-3.5 text-xs font-extrabold text-white shadow-md transition hover:bg-emerald-700 active:scale-[0.98] disabled:opacity-50"
+                  >
+                    {submitting ? (
+                      <>
+                        <Spinner size={14} /> Processing Submission...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="h-4 w-4" />
+                        <span>Finish & Submit Exam</span>
+                      </>
+                    )}
+                  </button>
                 </div>
               </div>
+
             </div>
             </>
             )}

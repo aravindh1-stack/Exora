@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search,
@@ -15,11 +15,14 @@ import {
   Check,
   AlertCircle,
   Trash2,
+  FileText,
+  XCircle,
 } from 'lucide-react';
 import type { StudentWithSession, StudentStatus } from '@/lib/types';
 import { Skeleton, Spinner } from './ui';
 import { formatTimeAgo, initials } from '@/lib/format';
-import { createStudent, deleteStudent, type StudentInput } from '@/lib/queries';
+import { createStudent, deleteStudent, fetchStudentResponses, type StudentInput, type ExamResponseDetail } from '@/lib/queries';
+
 
 interface StudentsProps {
   students: StudentWithSession[];
@@ -638,6 +641,20 @@ function StudentDetail({
   const StatusIcon = config.icon;
   const isFlagged = student.status === 'flagged';
 
+  const [responses, setResponses] = useState<ExamResponseDetail[]>([]);
+  const [loadingResponses, setLoadingResponses] = useState(false);
+  const [activeTab, setActiveTab] = useState<'responses' | 'profile'>('responses');
+
+  useEffect(() => {
+    if (student.session_id) {
+      setLoadingResponses(true);
+      fetchStudentResponses(student.session_id)
+        .then((res) => setResponses(res))
+        .catch((e) => console.error(e))
+        .finally(() => setLoadingResponses(false));
+    }
+  }, [student.session_id]);
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -654,7 +671,7 @@ function StudentDetail({
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.97, y: 8 }}
         transition={{ duration: 0.2 }}
-        className="panel-card relative z-10 w-full max-w-md overflow-hidden rounded-xl p-5"
+        className="panel-card relative z-10 flex max-h-[85vh] w-full max-w-xl flex-col overflow-hidden rounded-2xl p-6"
       >
         <button
           onClick={onClose}
@@ -664,7 +681,7 @@ function StudentDetail({
         </button>
 
         <div className="flex items-center gap-3.5">
-          <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-slate-900 text-sm font-bold text-white dark:bg-zinc-100 dark:text-black">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-slate-900 text-sm font-bold text-white dark:bg-zinc-100 dark:text-black">
             {initials(student.name)}
           </div>
           <div>
@@ -675,86 +692,207 @@ function StudentDetail({
           </div>
         </div>
 
-        <div className="mt-4 grid grid-cols-2 gap-2.5">
-          <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-3 dark:border-zinc-800 dark:bg-zinc-950/50">
-            <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-zinc-400">
-              <TrendingUp className="h-3 w-3" />
-              Score Achieved
-            </div>
-            <p
-              className={`mt-1 text-xl font-bold ${
-                student.status === 'in_progress'
-                  ? 'text-slate-400 dark:text-zinc-500'
-                  : student.score >= 80
-                    ? 'text-emerald-700 dark:text-emerald-400'
-                    : student.score >= 60
-                      ? 'text-slate-900 dark:text-zinc-100'
-                      : 'text-rose-600 dark:text-rose-400'
-              }`}
-            >
-              {student.status === 'in_progress' ? '—' : `${student.score}%`}
-            </p>
-          </div>
-          <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-3 dark:border-zinc-800 dark:bg-zinc-950/50">
-            <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-zinc-400">
-              <StatusIcon className="h-3 w-3" />
-              Session Status
-            </div>
-            <p className={`mt-1 text-sm font-bold ${config.text}`}>
-              {config.label}
-            </p>
-          </div>
-        </div>
-
-        <div className="mt-3 space-y-2 rounded-lg border border-slate-200 bg-slate-50/50 p-3 text-xs dark:border-zinc-800 dark:bg-zinc-950/50">
-          <div className="flex justify-between">
-            <span className="flex items-center gap-1 text-slate-500 dark:text-zinc-400">
-              <Building className="h-3 w-3" /> Department
-            </span>
-            <span className="font-semibold text-slate-900 dark:text-zinc-200">
-              {student.department || 'Computer Science'}
-            </span>
-          </div>
-          <div className="flex justify-between">
-            <span className="flex items-center gap-1 text-slate-500 dark:text-zinc-400">
-              <Calendar className="h-3 w-3" /> Academic Year / Sem
-            </span>
-            <span className="font-semibold text-slate-900 dark:text-zinc-200">
-              Year {student.year || 1} • Semester {student.semester || 1}
-            </span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-slate-500 dark:text-zinc-400">Email Address</span>
-            <span className="font-medium text-slate-900 dark:text-zinc-200">{student.email || '—'}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-slate-500 dark:text-zinc-400">Completed Time</span>
-            <span className="font-medium text-slate-900 dark:text-zinc-200">
-              {formatTimeAgo(student.completed_at)}
-            </span>
-          </div>
-        </div>
-
-        {isFlagged && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            className="mt-3 flex items-start gap-2.5 rounded-lg border border-rose-200 bg-rose-50 p-3 dark:border-rose-900/60 dark:bg-rose-950/40"
+        {/* Tab Navigation */}
+        <div className="mt-4 flex border-b border-slate-100 dark:border-zinc-800">
+          <button
+            onClick={() => setActiveTab('responses')}
+            className={`flex items-center gap-2 border-b-2 py-2 px-3 text-xs font-bold transition ${
+              activeTab === 'responses'
+                ? 'border-slate-900 text-slate-900 dark:border-white dark:text-white'
+                : 'border-transparent text-slate-400 hover:text-slate-600 dark:text-zinc-500 dark:hover:text-zinc-300'
+            }`}
           >
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-rose-600 dark:text-rose-400" />
+            <FileText className="h-3.5 w-3.5" />
+            <span>Student Responses ({responses.length})</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('profile')}
+            className={`flex items-center gap-2 border-b-2 py-2 px-3 text-xs font-bold transition ${
+              activeTab === 'profile'
+                ? 'border-slate-900 text-slate-900 dark:border-white dark:text-white'
+                : 'border-transparent text-slate-400 hover:text-slate-600 dark:text-zinc-500 dark:hover:text-zinc-300'
+            }`}
+          >
+            <GraduationCap className="h-3.5 w-3.5" />
+            <span>Session Summary</span>
+          </button>
+        </div>
+
+        <div className="mt-4 flex-1 overflow-y-auto pr-1 space-y-4">
+          {activeTab === 'responses' ? (
             <div>
-              <p className="text-xs font-semibold text-rose-800 dark:text-rose-300">
-                Malpractice Flagged
-              </p>
-              <p className="mt-0.5 text-xs text-rose-700/90 dark:text-rose-200/80">
-                {student.flag_reason ?? 'Flagged for review.'}
-              </p>
+              {loadingResponses ? (
+                <div className="flex items-center justify-center py-10 gap-2 text-xs font-semibold text-slate-500 dark:text-zinc-400">
+                  <Spinner size={16} /> Fetching student submitted answers...
+                </div>
+              ) : responses.length === 0 ? (
+                <div className="rounded-xl border border-slate-100 bg-slate-50/50 p-6 text-center dark:border-zinc-800/60 dark:bg-zinc-950/40">
+                  <AlertCircle className="mx-auto h-6 w-6 text-slate-400 dark:text-zinc-500" />
+                  <p className="mt-2 text-xs font-bold text-slate-700 dark:text-zinc-300">
+                    No Response Log Found
+                  </p>
+                  <p className="mt-1 text-[11px] text-slate-400 dark:text-zinc-500">
+                    {student.status === 'in_progress'
+                      ? 'Student examination is currently in progress.'
+                      : 'No specific answer submissions were recorded for this session.'}
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {responses.map((res, idx) => {
+                    const q = res.question;
+                    const selectedOpt = q && q.options ? q.options[res.selected_index] : undefined;
+                    const correctOpt = q && q.options ? q.options[q.correct_index] : undefined;
+
+                    return (
+                      <div
+                        key={res.id || idx}
+                        className={`rounded-xl border p-3.5 text-xs transition ${
+                          res.is_correct
+                            ? 'border-emerald-200 bg-emerald-50/40 dark:border-emerald-900/40 dark:bg-emerald-950/20'
+                            : 'border-rose-200 bg-rose-50/40 dark:border-rose-900/40 dark:bg-rose-950/20'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <span className="font-bold text-slate-900 dark:text-white">
+                            {idx + 1}. {q ? q.text : `Question ID: ${res.question_id}`}
+                          </span>
+                          <span
+                            className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                              res.is_correct
+                                ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200'
+                                : 'bg-rose-100 text-rose-800 dark:bg-rose-900 dark:text-rose-200'
+                            }`}
+                          >
+                            {res.is_correct ? (
+                              <>
+                                <Check className="h-3 w-3" /> Correct
+                              </>
+                            ) : (
+                              <>
+                                <XCircle className="h-3 w-3" /> Incorrect
+                              </>
+                            )}
+                          </span>
+                        </div>
+
+                        <div className="mt-2.5 space-y-1.5 font-medium">
+                          <div className="flex items-center gap-2 text-slate-700 dark:text-zinc-300">
+                            <span className="font-semibold text-slate-500 dark:text-zinc-400">
+                              Student Selected:
+                            </span>
+                            <span
+                              className={`rounded px-1.5 py-0.5 font-mono text-[11px] font-bold ${
+                                res.is_correct
+                                  ? 'bg-emerald-200/60 text-emerald-900 dark:bg-emerald-900/80 dark:text-emerald-100'
+                                  : 'bg-rose-200/60 text-rose-900 dark:bg-rose-900/80 dark:text-rose-100'
+                              }`}
+                            >
+                              {selectedOpt !== undefined
+                                ? `Option ${String.fromCharCode(65 + res.selected_index)}: ${selectedOpt}`
+                                : 'Skipped / Unanswered'}
+                            </span>
+                          </div>
+
+                          {!res.is_correct && correctOpt !== undefined && (
+                            <div className="flex items-center gap-2 text-slate-600 dark:text-zinc-400">
+                              <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                                Correct Answer:
+                              </span>
+                              <span className="rounded bg-emerald-100 px-1.5 py-0.5 font-mono text-[11px] font-bold text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200">
+                                Option {String.fromCharCode(65 + (q?.correct_index ?? 0))}: {correctOpt}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
-          </motion.div>
-        )}
+          ) : (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-2.5">
+                <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-3 dark:border-zinc-800 dark:bg-zinc-950/50">
+                  <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-zinc-400">
+                    <TrendingUp className="h-3 w-3" />
+                    Score Achieved
+                  </div>
+                  <p
+                    className={`mt-1 text-xl font-bold ${
+                      student.status === 'in_progress'
+                        ? 'text-slate-400 dark:text-zinc-500'
+                        : student.score >= 80
+                          ? 'text-emerald-700 dark:text-emerald-400'
+                          : student.score >= 60
+                            ? 'text-slate-900 dark:text-zinc-100'
+                            : 'text-rose-600 dark:text-rose-400'
+                    }`}
+                  >
+                    {student.status === 'in_progress' ? '—' : `${student.score}%`}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-3 dark:border-zinc-800 dark:bg-zinc-950/50">
+                  <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-zinc-400">
+                    <StatusIcon className="h-3 w-3" />
+                    Session Status
+                  </div>
+                  <p className={`mt-1 text-sm font-bold ${config.text}`}>
+                    {config.label}
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50/50 p-3 text-xs dark:border-zinc-800 dark:bg-zinc-950/50">
+                <div className="flex justify-between">
+                  <span className="flex items-center gap-1 text-slate-500 dark:text-zinc-400">
+                    <Building className="h-3 w-3" /> Department
+                  </span>
+                  <span className="font-semibold text-slate-900 dark:text-zinc-200">
+                    {student.department || 'Computer Science'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="flex items-center gap-1 text-slate-500 dark:text-zinc-400">
+                    <Calendar className="h-3 w-3" /> Academic Year / Sem
+                  </span>
+                  <span className="font-semibold text-slate-900 dark:text-zinc-200">
+                    Year {student.year || 1} • Semester {student.semester || 1}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500 dark:text-zinc-400">Email Address</span>
+                  <span className="font-medium text-slate-900 dark:text-zinc-200">{student.email || '—'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500 dark:text-zinc-400">Completed Time</span>
+                  <span className="font-medium text-slate-900 dark:text-zinc-200">
+                    {formatTimeAgo(student.completed_at)}
+                  </span>
+                </div>
+              </div>
+
+              {isFlagged && (
+                <div className="flex items-start gap-2.5 rounded-lg border border-rose-200 bg-rose-50 p-3 dark:border-rose-900/60 dark:bg-rose-950/40">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-rose-600 dark:text-rose-400" />
+                  <div>
+                    <p className="text-xs font-semibold text-rose-800 dark:text-rose-300">
+                      Malpractice Flagged
+                    </p>
+                    <p className="mt-0.5 text-xs text-rose-700/90 dark:text-rose-200/80">
+                      {student.flag_reason ?? 'Flagged for review.'}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </motion.div>
     </motion.div>
   );
 }
+
 
 
