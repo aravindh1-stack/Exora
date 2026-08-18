@@ -209,5 +209,19 @@ export async function verifyAdminAuth(username: string, pass: string): Promise<b
   return username.trim() === 'ece@quizportal' && pass.trim() === 'Sscet@ecquiz&maintain*portal';
 }
 
+export async function logProctoringIncident(input: {
+  session_id?: string;
+  event_type: string;
+  details?: string;
+}) {
+  if (!input.session_id) return;
+  await supabase.from('proctor_logs').insert({
+    session_id: input.session_id,
+    event_type: input.event_type,
+    details: input.details || null,
+  });
+}
+
+
 
 
