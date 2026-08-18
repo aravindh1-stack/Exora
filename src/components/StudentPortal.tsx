@@ -1291,3 +1291,6 @@ export function StudentPortal({
     </div>
   );
 }
+
+export default StudentPortal;
+

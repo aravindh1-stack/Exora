@@ -1,6 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { StudentWithSession, ExamRoom, Question } from '@/lib/types';
+import { StudentPortal } from '@/components/StudentPortal';
+import { fetchQuestions, fetchStudentsWithSessions, fetchExamRooms } from '@/lib/queries';
 import { PortalErrorBoundary } from '@/components/PortalErrorBoundary';
+
+
 
 export function StudentApp() {
   const [students, setStudents] = useState<StudentWithSession[]>([]);
