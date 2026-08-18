@@ -13,11 +13,14 @@ import { fetchQuestions, fetchStudentsWithSessions, fetchExamRooms } from '@/lib
 
 function App() {
   // Detect standalone Student vs Admin apps
-  // Student Portal: exora.aarga.org OR /student OR ?mode=student
-  const isStudentPortal =
-    window.location.hostname.startsWith('exora.') ||
-    window.location.pathname.startsWith('/student') ||
-    window.location.search.includes('mode=student');
+  // Admin Portal: adminatexora.aarga.org OR /admin OR ?mode=admin
+  const isAdminPortal =
+    window.location.hostname.startsWith('adminatexora.') ||
+    window.location.pathname.startsWith('/admin') ||
+    window.location.search.includes('mode=admin');
+
+  // Root URL & exora-zeta.vercel.app default to Student Exam Portal
+  const isStudentPortal = !isAdminPortal;
 
   // Admin Authentication State
   const [isAdminAuthed, setIsAdminAuthed] = useState<boolean>(() => {
