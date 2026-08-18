@@ -102,25 +102,29 @@ function App() {
     setIsAdminAuthed(false);
   }
 
+  if (isStudentPortal) {
+    return (
+      <div className="relative min-h-screen bg-slate-50 text-slate-900 transition-colors duration-200 dark:bg-black dark:text-zinc-100">
+        <div className="pointer-events-none fixed inset-0 bg-grid-light bg-grid opacity-60 dark:bg-grid-dark dark:opacity-30" />
+        <StudentPortal
+          students={students}
+          rooms={rooms}
+          questions={questions}
+          onExamSubmitted={() => {
+            loadStudents();
+            loadRooms();
+          }}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="relative min-h-screen bg-slate-50 text-slate-900 transition-colors duration-200 dark:bg-black dark:text-zinc-100">
       {/* Crisp background grid */}
       <div className="pointer-events-none fixed inset-0 bg-grid-light bg-grid opacity-60 dark:bg-grid-dark dark:opacity-30" />
 
-      {isStudentPortal ? (
-        /* Pure Standalone Student Exam Portal (Zero Admin Links or Switchers) */
-        <div className="min-h-screen">
-          <StudentPortal
-            students={students}
-            rooms={rooms}
-            questions={questions}
-            onExamSubmitted={() => {
-              loadStudents();
-              loadRooms();
-            }}
-          />
-        </div>
-      ) : !isAdminAuthed ? (
+      {!isAdminAuthed ? (
         /* Admin Login Screen */
         <AdminLogin onSuccess={() => setIsAdminAuthed(true)} />
       ) : (
