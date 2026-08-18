@@ -29,6 +29,63 @@ interface StudentPortalProps {
 
 type Stage = 'verify' | 'seb_check' | 'terms' | 'exam' | 'submitted';
 
+const DEFAULT_FALLBACK_QUESTIONS: Question[] = [
+  {
+    id: 'default-q1',
+    text: 'What is the frequency range of High Frequency (HF) band in radio communication systems?',
+    options: ['30 kHz - 300 kHz', '3 MHz - 30 MHz', '300 MHz - 3 GHz', '3 GHz - 30 GHz'],
+    correct_index: 1,
+    topic: 'Communication Systems',
+    difficulty: 'medium',
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: 'default-q2',
+    text: 'Which digital modulation technique is used to combine phase and amplitude modulation for high data rate transmission?',
+    options: ['ASK', 'FSK', 'QAM (Quadrature Amplitude Modulation)', 'BPSK'],
+    correct_index: 2,
+    topic: 'Digital Communication',
+    difficulty: 'medium',
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: 'default-q3',
+    text: 'According to Nyquist sampling theorem, what is the minimum sampling frequency (Fs) required for a signal with maximum frequency component (Fmax)?',
+    options: ['Fs >= Fmax', 'Fs >= 2 * Fmax', 'Fs = Fmax / 2', 'Fs <= 0.5 * Fmax'],
+    correct_index: 1,
+    topic: 'Digital Signal Processing',
+    difficulty: 'easy',
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: 'default-q4',
+    text: 'What is the phase shift between input and output voltage of an Operational Amplifier (Op-Amp) in an inverting configuration?',
+    options: ['0 Degrees', '90 Degrees', '180 Degrees', '360 Degrees'],
+    correct_index: 2,
+    topic: 'Analog Electronics',
+    difficulty: 'easy',
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: 'default-q5',
+    text: 'Which register pair is used as a memory pointer (HL pair) in 8085 Microprocessor architecture?',
+    options: ['BC Pair', 'DE Pair', 'HL Pair', 'PSW Pair'],
+    correct_index: 2,
+    topic: 'Microprocessors & Microcontrollers',
+    difficulty: 'medium',
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: 'default-q6',
+    text: 'What is the time complexity of searching an element in a balanced Binary Search Tree (BST)?',
+    options: ['O(1)', 'O(log n)', 'O(n)', 'O(n log n)'],
+    correct_index: 1,
+    topic: 'Data Structures',
+    difficulty: 'easy',
+    created_at: new Date().toISOString(),
+  },
+];
+
 export function StudentPortal({
   students,
   rooms,
@@ -114,10 +171,13 @@ export function StudentPortal({
       return;
     }
 
-    // Get questions for this room
+    // Get questions for this room (or general questions or default fallbacks)
     let qList = questions.filter((q) => q.room_id === roomMatch.id);
     if (qList.length === 0) {
-      qList = questions.slice(0, 10);
+      qList = questions.filter((q) => !q.room_id || q.room_id === '');
+    }
+    if (qList.length === 0) {
+      qList = DEFAULT_FALLBACK_QUESTIONS;
     }
 
     // Persistent Timer Calculation (handles exit & 2 min re-entry seamlessly)
