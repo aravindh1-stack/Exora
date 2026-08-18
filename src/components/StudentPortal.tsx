@@ -240,14 +240,11 @@ export function StudentPortal({
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   }, [timeLeft]);
 
-  // SEB Detection State
-  const isSEBBrowser = useMemo(() => {
+  // Strict SEB Detection State
+  const isSEBVerified = useMemo(() => {
     const ua = navigator.userAgent;
     return ua.includes('SEB') || ua.includes('SafeExamBrowser');
   }, []);
-
-  const [sebBypassed, setSebBypassed] = useState(false);
-  const isSEBVerified = isSEBBrowser || sebBypassed;
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
@@ -468,17 +465,10 @@ export function StudentPortal({
                     </button>
                   </div>
 
-                  <div className="flex items-center justify-between border-t border-slate-200/60 pt-2.5 dark:border-zinc-800/60">
-                    <span className="text-[10px] text-slate-400 dark:text-zinc-500">
-                      Tip: Open downloaded .seb file to launch SEB automatically.
+                  <div className="border-t border-slate-200/60 pt-2.5 text-center dark:border-zinc-800/60">
+                    <span className="text-[11px] font-medium text-slate-500 dark:text-zinc-400">
+                      💡 Tip: Download and open the <strong>.seb</strong> config file to launch Safe Exam Browser automatically.
                     </span>
-
-                    <button
-                      onClick={() => setSebBypassed(true)}
-                      className="text-[11px] font-bold text-emerald-600 hover:underline dark:text-emerald-400"
-                    >
-                      Bypass for Testing / Demo Mode →
-                    </button>
                   </div>
                 </div>
               ) : (
