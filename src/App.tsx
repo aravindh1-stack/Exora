@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ShieldCheck, Bell, Search, Sun, Moon } from 'lucide-react';
+import { ShieldCheck, Bell, Search, Sun, Moon, LogOut } from 'lucide-react';
 import type { Section, Question, StudentWithSession, ExamRoom } from '@/lib/types';
 import { Sidebar, MobileNav } from '@/components/Sidebar';
 import { Dashboard } from '@/components/Dashboard';
@@ -8,16 +8,21 @@ import { Questions } from '@/components/Questions';
 import { Students } from '@/components/Students';
 import { Rooms } from '@/components/Rooms';
 import { StudentPortal } from '@/components/StudentPortal';
+import { AdminLogin } from '@/components/AdminLogin';
 import { fetchQuestions, fetchStudentsWithSessions, fetchExamRooms } from '@/lib/queries';
 
 function App() {
-  // Detect domain or path for standalone Student vs Admin apps
+  // Detect standalone Student vs Admin apps
   // Student Portal: exora.aarga.org OR /student OR ?mode=student
-  // Admin Console: adminatexora.aarga.org OR default admin app
   const isStudentPortal =
     window.location.hostname.startsWith('exora.') ||
     window.location.pathname.startsWith('/student') ||
     window.location.search.includes('mode=student');
+
+  // Admin Authentication State
+  const [isAdminAuthed, setIsAdminAuthed] = useState<boolean>(() => {
+    return localStorage.getItem('exora_admin_authed') === 'true';
+  });
 
   const [section, setSection] = useState<Section>('dashboard');
   const [students, setStudents] = useState<StudentWithSession[]>([]);
@@ -89,13 +94,18 @@ function App() {
     loadRooms();
   }, [loadStudents, loadQuestions, loadRooms]);
 
+  function handleAdminLogout() {
+    localStorage.removeItem('exora_admin_authed');
+    setIsAdminAuthed(false);
+  }
+
   return (
     <div className="relative min-h-screen bg-slate-50 text-slate-900 transition-colors duration-200 dark:bg-black dark:text-zinc-100">
       {/* Crisp background grid */}
       <div className="pointer-events-none fixed inset-0 bg-grid-light bg-grid opacity-60 dark:bg-grid-dark dark:opacity-30" />
 
       {isStudentPortal ? (
-        /* Standalone Student Exam Portal View (exora.aarga.org) */
+        /* Pure Standalone Student Exam Portal (Zero Admin Links or Switchers) */
         <div className="min-h-screen">
           <StudentPortal
             students={students}
@@ -107,8 +117,11 @@ function App() {
             }}
           />
         </div>
+      ) : !isAdminAuthed ? (
+        /* Admin Login Screen */
+        <AdminLogin onSuccess={() => setIsAdminAuthed(true)} />
       ) : (
-        /* Standalone Admin Proctor Console View (adminatexora.aarga.org) */
+        /* Authenticated Admin Proctor Console */
         <div className="relative flex min-h-screen">
           <Sidebar
             active={section}
@@ -172,13 +185,22 @@ function App() {
                   </div>
                   <div className="hidden text-left sm:block">
                     <p className="text-xs font-semibold text-slate-900 dark:text-zinc-100">
-                      Admin
+                      ece@quizportal
                     </p>
                     <p className="text-[10px] text-slate-500 dark:text-zinc-400">
-                      Proctor
+                      Proctor Admin
                     </p>
                   </div>
                 </div>
+
+                <button
+                  onClick={handleAdminLogout}
+                  className="flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-300"
+                  title="Logout Admin"
+                >
+                  <LogOut className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Logout</span>
+                </button>
               </div>
             </header>
 

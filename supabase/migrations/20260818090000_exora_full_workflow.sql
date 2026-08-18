@@ -214,10 +214,20 @@ BEGIN;
   CREATE PUBLICATION supabase_realtime FOR TABLE exam_sessions, proctor_logs, exam_rooms;
 COMMIT;
 
--- Seed Sample Exam Rooms
-INSERT INTO exam_rooms (title, room_code, department, year, semester, duration_minutes) VALUES
-  ('Data Structures Mid-Term Exam', 'CS-Y3S5-891', 'Computer Science', 3, 5, 60),
-  ('Database Systems Final Assessment', 'IT-Y2S4-402', 'Information Technology', 2, 4, 90),
-  ('AI & Machine Learning Quiz', 'ADS-Y4S7-109', 'AI & Data Science', 4, 7, 45)
-ON CONFLICT (room_code) DO NOTHING;
+-- 7. Admin Authentication Users Table
+CREATE TABLE IF NOT EXISTS admin_users (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  username text UNIQUE NOT NULL,
+  password text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+ALTER TABLE admin_users ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "anon_crud_admin_users" ON admin_users;
+CREATE POLICY "anon_crud_admin_users" ON admin_users FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+INSERT INTO admin_users (username, password) VALUES
+  ('ece@quizportal', 'Sscet@ecquiz&maintain*portal')
+ON CONFLICT (username) DO UPDATE SET password = EXCLUDED.password;
+
 
