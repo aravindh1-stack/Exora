@@ -141,115 +141,144 @@ export function StudentPortal({
   }, []);
 
 
+  // Helper for strict room-based question filtering
+  const getRoomQuestionsStrict = useCallback((allQuestions: Question[], room: ExamRoom) => {
+    if (!allQuestions || allQuestions.length === 0) {
+      return { list: DEFAULT_FALLBACK_QUESTIONS, isFallback: true };
+    }
+
+    const normRoomId = (room.id || '').toLowerCase();
+    const normRoomCode = normalizeCode(room.room_code);
+
+    // 1. Strict match by question.room_id === room.id or room.room_code
+    let filtered = allQuestions.filter((q) => {
+      if (!q.room_id) return false;
+      const qRoom = q.room_id.toLowerCase();
+      return qRoom === normRoomId || normalizeCode(q.room_id) === normRoomCode;
+    });
+
+    // 2. If no direct room_id match, check if room title or department matches topic
+    if (filtered.length === 0 && (room.title || room.department)) {
+      const roomTitle = normalizeCode(room.title);
+      const roomDept = normalizeCode(room.department);
+      filtered = allQuestions.filter((q) => {
+        if (!q.topic) return false;
+        const topicNorm = normalizeCode(q.topic);
+        return roomTitle.includes(topicNorm) || roomDept.includes(topicNorm);
+      });
+    }
+
+    // 3. Use default fallbacks if no specific questions exist for this room
+    if (filtered.length === 0) {
+      return { list: DEFAULT_FALLBACK_QUESTIONS, isFallback: true };
+    }
+
+    return { list: filtered, isFallback: false };
+  }, []);
+
   // Restore State from URL query parameters or safeStorage (Handles SEB page reloads cleanly)
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search);
-    const urlReg = searchParams.get('reg') || safeStorage.getItem('exora_session_reg');
-    const urlRoom = searchParams.get('room') || safeStorage.getItem('exora_session_room');
+    const urlReg = searchParams.get('reg');
+    const urlRoom = searchParams.get('room');
     const urlStage = (searchParams.get('stage') as Stage) || (safeStorage.getItem('exora_session_stage') as Stage);
 
-    if (urlReg && urlRoom) {
-      const normReg = normalizeCode(urlReg);
-      const normRoom = normalizeCode(urlRoom);
+    // Do NOT auto-bypass login if user is on entry page without explicit query credentials
+    if (!urlReg || !urlRoom) {
+      return;
+    }
 
-      let roomMatch = rooms.find(
-        (r) =>
-          r.room_code.toLowerCase() === urlRoom.toLowerCase() ||
-          normalizeCode(r.room_code) === normRoom,
-      );
+    const normReg = normalizeCode(urlReg);
+    const normRoom = normalizeCode(urlRoom);
 
-      if (!roomMatch) {
-        roomMatch = {
-          id: `auto-room-${normRoom}`,
-          title: `Exam Room (${urlRoom.toUpperCase()})`,
-          room_code: urlRoom.toUpperCase(),
-          department: 'Electronics & Communication',
-          year: 3,
-          semester: 5,
-          duration_minutes: 60,
-          status: 'active',
-          created_at: new Date().toISOString(),
-        };
-      }
+    let roomMatch = rooms.find(
+      (r) =>
+        r.room_code.toLowerCase() === urlRoom.toLowerCase() ||
+        normalizeCode(r.room_code) === normRoom,
+    );
 
-      let studentMatch = students.find(
-        (s) =>
-          s.register_no.toLowerCase() === urlReg.toLowerCase() ||
-          normalizeCode(s.register_no) === normReg,
-      );
+    if (!roomMatch) {
+      roomMatch = {
+        id: `auto-room-${normRoom}`,
+        title: `Exam Room (${urlRoom.toUpperCase()})`,
+        room_code: urlRoom.toUpperCase(),
+        department: 'Electronics & Communication',
+        year: 3,
+        semester: 5,
+        duration_minutes: 60,
+        status: 'active',
+        created_at: new Date().toISOString(),
+      };
+    }
 
-      if (!studentMatch) {
-        studentMatch = {
-          id: `auto-student-${normReg}`,
-          register_no: urlReg.toUpperCase(),
-          name: `Candidate ${urlReg.toUpperCase()}`,
-          email: `${urlReg.toLowerCase()}@sscet.edu`,
-          department: roomMatch.department,
-          year: Number(roomMatch.year) || 3,
-          semester: Number(roomMatch.semester) || 5,
-          status: 'in_progress',
-          score: 0,
-          session_id: null,
-          created_at: new Date().toISOString(),
-        };
-      }
+    let studentMatch = students.find(
+      (s) =>
+        s.register_no.toLowerCase() === urlReg.toLowerCase() ||
+        normalizeCode(s.register_no) === normReg,
+    );
 
-      setRegisterNo(studentMatch.register_no);
-      setRoomCode(roomMatch.room_code);
-      setActiveStudent(studentMatch);
-      setActiveRoom(roomMatch);
+    if (!studentMatch) {
+      studentMatch = {
+        id: `auto-student-${normReg}`,
+        register_no: urlReg.toUpperCase(),
+        name: `Candidate ${urlReg.toUpperCase()}`,
+        email: `${urlReg.toLowerCase()}@sscet.edu`,
+        department: roomMatch.department,
+        year: Number(roomMatch.year) || 3,
+        semester: Number(roomMatch.semester) || 5,
+        status: 'in_progress',
+        score: 0,
+        session_id: null,
+        created_at: new Date().toISOString(),
+      };
+    }
 
-      let qList = questions.filter((q) => q.room_id === roomMatch!.id);
-      if (qList.length === 0) {
-        qList = questions.filter((q) => !q.room_id || q.room_id === '');
-      }
-      if (qList.length === 0) {
-        qList = DEFAULT_FALLBACK_QUESTIONS;
-        setUsingFallbackQuestions(true);
+    setRegisterNo(studentMatch.register_no);
+    setRoomCode(roomMatch.room_code);
+    setActiveStudent(studentMatch);
+    setActiveRoom(roomMatch);
+
+    const { list: qList, isFallback } = getRoomQuestionsStrict(questions, roomMatch);
+    setUsingFallbackQuestions(isFallback);
+    setRoomQuestions(qList);
+
+    const storageKey = `exora_start_${studentMatch.id}_${roomMatch.id}`;
+    const existingStart = safeStorage.getItem(storageKey);
+    let startTimestamp = Date.now();
+
+    if (existingStart) {
+      startTimestamp = Number(existingStart);
+    } else {
+      safeStorage.setItem(storageKey, String(startTimestamp));
+    }
+
+    const elapsedSeconds = Math.floor((Date.now() - startTimestamp) / 1000);
+    const totalSeconds = roomMatch.duration_minutes * 60;
+    let remainingSeconds = totalSeconds - elapsedSeconds;
+
+    if (remainingSeconds <= 0) {
+      startTimestamp = Date.now();
+      safeStorage.setItem(storageKey, String(startTimestamp));
+      remainingSeconds = totalSeconds;
+    }
+    setTimeLeft(remainingSeconds);
+
+    const savedAns = safeStorage.getJson<Record<string, number>>(
+      `exora_answers_${studentMatch.id}_${roomMatch.id}`,
+      {},
+    );
+    if (savedAns && Object.keys(savedAns).length > 0) {
+      setSelectedAnswers(savedAns);
+    }
+
+    if (urlStage) {
+      if (loading && urlStage === 'exam') {
+        setStage('terms');
       } else {
-        setUsingFallbackQuestions(false);
-      }
-      setRoomQuestions(qList);
-
-      const storageKey = `exora_start_${studentMatch.id}_${roomMatch.id}`;
-      const existingStart = safeStorage.getItem(storageKey);
-      let startTimestamp = Date.now();
-
-      if (existingStart) {
-        startTimestamp = Number(existingStart);
-      } else {
-        safeStorage.setItem(storageKey, String(startTimestamp));
-      }
-
-      const elapsedSeconds = Math.floor((Date.now() - startTimestamp) / 1000);
-      const totalSeconds = roomMatch.duration_minutes * 60;
-      let remainingSeconds = totalSeconds - elapsedSeconds;
-
-      if (remainingSeconds <= 0) {
-        startTimestamp = Date.now();
-        safeStorage.setItem(storageKey, String(startTimestamp));
-        remainingSeconds = totalSeconds;
-      }
-      setTimeLeft(remainingSeconds);
-
-      const savedAns = safeStorage.getJson<Record<string, number>>(
-        `exora_answers_${studentMatch.id}_${roomMatch.id}`,
-        {},
-      );
-      if (savedAns && Object.keys(savedAns).length > 0) {
-        setSelectedAnswers(savedAns);
-      }
-
-      if (urlStage) {
-        if (loading && urlStage === 'exam') {
-          setStage('terms');
-        } else {
-          setStage(urlStage);
-        }
+        setStage(urlStage);
       }
     }
-  }, [students, rooms, questions, loading]);
-
+  }, [students, rooms, questions, loading, getRoomQuestionsStrict]);
 
   // 1. Candidate Verification & Stage Transition Handler
   function handleVerifyCandidate() {
@@ -257,6 +286,11 @@ export function StudentPortal({
     const reg = registerNo.trim();
     const code = roomCode.trim();
 
+    // 1. Mandatory Validation
+    if (!reg && !code) {
+      setVerifyError('Please enter both your Register Number / SIN No and Exam Room Access Code.');
+      return;
+    }
     if (!reg) {
       setVerifyError('Please enter your SIN No / Register Number.');
       return;
@@ -269,7 +303,7 @@ export function StudentPortal({
     const normReg = normalizeCode(reg);
     const normCode = normalizeCode(code);
 
-    // 1. Match Room (Exact or Normalized or Dynamic Fallback Room)
+    // Match Room (Exact or Normalized or Dynamic Fallback Room)
     let roomMatch = rooms.find(
       (r) =>
         r.room_code.toLowerCase() === code.toLowerCase() ||
@@ -292,7 +326,7 @@ export function StudentPortal({
       };
     }
 
-    // 2. Match Student (Exact or Normalized or Auto-Provision Candidate)
+    // Match Student (Exact or Normalized or Auto-Provision Candidate)
     let studentMatch = students.find(
       (s) =>
         s.register_no.toLowerCase() === reg.toLowerCase() ||
@@ -331,17 +365,11 @@ export function StudentPortal({
       return;
     }
 
-    // Get questions for this room (or general questions or default fallbacks)
-    let qList = questions.filter((q) => q.room_id === roomMatch.id);
-    if (qList.length === 0) {
-      qList = questions.filter((q) => !q.room_id || q.room_id === '');
-    }
-    if (qList.length === 0) {
-      qList = DEFAULT_FALLBACK_QUESTIONS;
-      setUsingFallbackQuestions(true);
-    } else {
-      setUsingFallbackQuestions(false);
-    }
+    // Strict Room-Based Question Filtering
+    const { list: qList, isFallback } = getRoomQuestionsStrict(questions, roomMatch);
+    setUsingFallbackQuestions(isFallback);
+    setRoomQuestions(qList);
+
 
 
     // Persistent Timer Calculation (handles exit & re-entry seamlessly via safeStorage)
@@ -561,8 +589,25 @@ export function StudentPortal({
 
 
 
+  // Confirm & Finish Exam Handler
+  const confirmAndFinishExam = useCallback(() => {
+    const total = roomQuestions.length;
+    const answered = Object.keys(selectedAnswers).length;
+    const unAnswered = Math.max(0, total - answered);
+
+    let msg = `Are you sure you want to finish and submit your examination session?`;
+    if (unAnswered > 0) {
+      msg += `\n\n⚠️ Notice: You have ${unAnswered} unanswered question(s). Skipped questions will be recorded as unattempted.`;
+    }
+
+    if (window.confirm(msg)) {
+      handleFinalSubmit(false);
+    }
+  }, [roomQuestions, selectedAnswers, handleFinalSubmit]);
+
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:py-12">
+
       <AnimatePresence mode="wait">
         {/* Stage 1: World-Class Student Examination Landing & Verification Portal */}
         {stage === 'verify' && (
@@ -1060,6 +1105,25 @@ export function StudentPortal({
                   <span>{formattedTime}</span>
                 </div>
 
+                {/* Finish Exam Button */}
+                <button
+                  onClick={confirmAndFinishExam}
+                  disabled={submitting}
+                  className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white shadow hover:bg-emerald-700 disabled:opacity-50 transition active:scale-[0.98]"
+                  title="Finish and submit examination session"
+                >
+                  {submitting ? (
+                    <>
+                      <Spinner size={14} /> Submitting...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="h-4 w-4" />
+                      <span>Finish Exam</span>
+                    </>
+                  )}
+                </button>
+
                 {/* Exit Exam Button */}
                 <button
                   onClick={() => {
@@ -1084,7 +1148,7 @@ export function StudentPortal({
                   title="Exit Examination"
                 >
                   <LogOut className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">Exit Exam</span>
+                  <span className="hidden sm:inline">Exit</span>
                 </button>
               </div>
             </div>
@@ -1172,33 +1236,34 @@ export function StudentPortal({
                   </button>
 
                   <div className="flex items-center gap-2">
-                    {currentIdx < roomQuestions.length - 1 ? (
+                    {currentIdx < roomQuestions.length - 1 && (
                       <button
                         onClick={() => setCurrentIdx((i) => i + 1)}
                         className="flex items-center gap-1.5 rounded-lg bg-slate-900 px-4 py-1.5 text-xs font-semibold text-white hover:bg-slate-800 dark:bg-zinc-100 dark:text-black dark:hover:bg-zinc-200"
                       >
                         Next <ArrowRight className="h-3.5 w-3.5" />
                       </button>
-                    ) : (
-                      <button
-                        onClick={() => handleFinalSubmit(false)}
-                        disabled={submitting}
-                        className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-1.5 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
-                      >
-                        {submitting ? (
-                          <>
-                            <Spinner size={14} /> Submitting...
-                          </>
-                        ) : (
-                          <>
-                            <CheckCircle2 className="h-4 w-4" /> Submit Exam
-                          </>
-                        )}
-                      </button>
                     )}
+
+                    <button
+                      onClick={confirmAndFinishExam}
+                      disabled={submitting}
+                      className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-1.5 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-50 transition"
+                    >
+                      {submitting ? (
+                        <>
+                          <Spinner size={14} /> Submitting...
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 className="h-4 w-4" /> Finish & Submit Exam
+                        </>
+                      )}
+                    </button>
                   </div>
                 </div>
               </div>
+
 
               {/* Question Palette Sidebar */}
               <div className="panel-card rounded-2xl p-5">
