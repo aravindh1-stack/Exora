@@ -16,12 +16,17 @@ import { fetchQuestions, fetchStudentsWithSessions, fetchExamRooms } from '@/lib
 import { safeStorage } from '@/lib/storage';
 
 function App() {
-  // Detect standalone Student vs Admin apps
-  // Admin Portal: adminatexora.aarga.org OR /admin OR ?mode=admin
+  // Explicit Domain Routing:
+  // Admin Console: adminatexora.aarga.org OR host containing 'admin' OR /admin OR ?mode=admin
+  // Student Portal: exora.aarga.org OR any standard domain
   const isAdminPortal =
-    window.location.hostname.startsWith('adminatexora.') ||
+    window.location.hostname === 'adminatexora.aarga.org' ||
+    window.location.hostname.startsWith('admin') ||
+    window.location.hostname.includes('admin') ||
     window.location.pathname.startsWith('/admin') ||
     window.location.search.includes('mode=admin');
+
+
 
   // Root URL & exora-zeta.vercel.app default to Student Exam Portal
   const isStudentPortal = !isAdminPortal;
