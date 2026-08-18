@@ -439,20 +439,45 @@ export function StudentPortal({
 
                     <button
                       onClick={() => {
-                        window.location.href = `seb://exora.aarga.org?room=${activeRoom.room_code}`;
+                        const startUrl = window.location.href;
+                        const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>startURL</key>
+    <string>${startUrl}</string>
+    <key>sendURLFilterRules</key>
+    <false/>
+    <key>allowQuit</key>
+    <true/>
+</dict>
+</plist>`;
+                        const blob = new Blob([xml], { type: 'application/seb' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `Exora_Exam_${activeRoom.room_code}.seb`;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
                       }}
                       className="flex items-center justify-center gap-1.5 rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white shadow-subtle transition hover:bg-slate-800 dark:bg-zinc-100 dark:text-black dark:hover:bg-zinc-200"
                     >
-                      <span>2. Launch in SEB App</span>
+                      <span>2. Download SEB Config File (.seb)</span>
                     </button>
                   </div>
 
-                  <div className="border-t border-slate-200/60 pt-2.5 text-center dark:border-zinc-800/60">
+                  <div className="flex items-center justify-between border-t border-slate-200/60 pt-2.5 dark:border-zinc-800/60">
+                    <span className="text-[10px] text-slate-400 dark:text-zinc-500">
+                      Tip: Open downloaded .seb file to launch SEB automatically.
+                    </span>
+
                     <button
                       onClick={() => setSebBypassed(true)}
-                      className="text-[11px] font-semibold text-slate-500 hover:text-slate-900 hover:underline dark:text-zinc-400 dark:hover:text-white"
+                      className="text-[11px] font-bold text-emerald-600 hover:underline dark:text-emerald-400"
                     >
-                      Proceed in Standard Browser (Bypass for Testing / Demo) →
+                      Bypass for Testing / Demo Mode →
                     </button>
                   </div>
                 </div>
