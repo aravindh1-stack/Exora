@@ -243,70 +243,119 @@ export function StudentPortal({
   const currentQ = roomQuestions[currentIdx];
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-6">
+    <div className="mx-auto max-w-4xl px-4 py-8">
       <AnimatePresence mode="wait">
-        {/* Stage 1: Verification Form */}
+        {/* Stage 1: Redesigned Premium Student Verification & Login Portal */}
         {stage === 'verify' && (
           <motion.div
             key="verify"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            className="panel-card mx-auto max-w-md rounded-2xl p-6 sm:p-8"
+            initial={{ opacity: 0, y: 12, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -12, scale: 0.98 }}
+            transition={{ duration: 0.25 }}
+            className="mx-auto max-w-xl"
           >
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-900 text-white shadow-subtle dark:bg-zinc-100 dark:text-black">
-              <GraduationCap className="h-6 w-6" />
+            {/* Top Branding & Status Pill */}
+            <div className="mb-6 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-900 text-white shadow-subtle dark:bg-zinc-100 dark:text-black">
+                  <GraduationCap className="h-5 w-5" />
+                </div>
+                <div>
+                  <h1 className="text-base font-extrabold tracking-tight text-slate-900 dark:text-white">
+                    EXORA PORTAL
+                  </h1>
+                  <p className="text-[10px] font-semibold text-slate-400 dark:text-zinc-500">
+                    SSCET Examination Engine
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-bold text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/50 dark:text-emerald-300">
+                <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                Proctor Engine Active
+              </div>
             </div>
 
-            <h2 className="mt-4 text-xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-2xl">
-              Student Exam Portal
-            </h2>
-            <p className="mt-1 text-xs text-slate-500 dark:text-zinc-400">
-              Enter your SIN Number and Access Code to join your target examination.
-            </p>
-
-            <div className="mt-6 space-y-4">
-              <div>
-                <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-zinc-400">
-                  SIN No / Register Number *
-                </label>
-                <input
-                  value={registerNo}
-                  onChange={(e) => setRegisterNo(e.target.value)}
-                  placeholder="e.g. REG2026001"
-                  className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 font-mono text-sm text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-slate-400 dark:border-zinc-800 dark:bg-pitch-900 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-zinc-700"
-                />
+            {/* Main Login Panel */}
+            <div className="panel-card relative overflow-hidden rounded-2xl p-6 sm:p-8">
+              <div className="border-b border-slate-100 pb-4 dark:border-zinc-800">
+                <h2 className="text-xl font-extrabold text-slate-900 dark:text-white sm:text-2xl">
+                  Student Examination Login
+                </h2>
+                <p className="mt-1 text-xs text-slate-500 dark:text-zinc-400">
+                  Verify your identity and enter your assigned Exam Room Access Code to begin.
+                </p>
               </div>
 
-              <div>
-                <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-zinc-400">
-                  Exam Room Access Code *
-                </label>
-                <div className="relative">
-                  <Key className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 dark:text-zinc-500" />
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleVerifyCandidate();
+                }}
+                className="mt-6 space-y-4"
+              >
+                {/* SIN / Register No Input */}
+                <div>
+                  <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-zinc-400">
+                    SIN No / Register Number *
+                  </label>
                   <input
-                    value={roomCode}
-                    onChange={(e) => setRoomCode(e.target.value)}
-                    placeholder="e.g. CS-Y3S5-891"
-                    className="mt-1 w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-9 pr-3.5 font-mono text-sm uppercase text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-slate-400 dark:border-zinc-800 dark:bg-pitch-900 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-zinc-700"
+                    value={registerNo}
+                    onChange={(e) => setRegisterNo(e.target.value)}
+                    placeholder="e.g. REG2026001"
+                    className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 font-mono text-sm text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-slate-400 dark:border-zinc-800 dark:bg-pitch-900 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-zinc-700"
                   />
                 </div>
-              </div>
 
-              {verifyError && (
-                <div className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-300">
-                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                  <span>{verifyError}</span>
+                {/* Exam Room Access Code Input */}
+                <div>
+                  <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-zinc-400">
+                    Exam Room Access Code *
+                  </label>
+                  <div className="relative mt-1">
+                    <Key className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 dark:text-zinc-500" />
+                    <input
+                      value={roomCode}
+                      onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
+                      placeholder="e.g. CS-Y3S5-891"
+                      className="w-full rounded-xl border border-slate-200 bg-white py-3 pl-10 pr-3.5 font-mono text-sm uppercase text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-slate-400 dark:border-zinc-800 dark:bg-pitch-900 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-zinc-700"
+                    />
+                  </div>
                 </div>
-              )}
 
-              <button
-                onClick={handleVerifyCandidate}
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 py-3 text-xs font-bold text-white shadow-subtle transition hover:bg-slate-800 active:scale-[0.99] dark:bg-zinc-100 dark:text-black dark:hover:bg-zinc-200"
-              >
-                <span>Verify Eligibility & Join</span>
-                <ArrowRight className="h-4 w-4" />
-              </button>
+                {/* Error Banner */}
+                {verifyError && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="flex items-start gap-2.5 rounded-xl border border-rose-200 bg-rose-50 p-3.5 text-xs font-medium text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-300"
+                  >
+                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                    <span>{verifyError}</span>
+                  </motion.div>
+                )}
+
+                {/* Anti-Cheat Compliance Badge */}
+                <div className="rounded-xl border border-slate-100 bg-slate-50/80 p-3 text-[11px] text-slate-500 dark:border-zinc-800/80 dark:bg-zinc-950/50 dark:text-zinc-400">
+                  <div className="flex items-center gap-1.5 font-semibold text-slate-800 dark:text-zinc-200">
+                    <ShieldCheck className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                    <span>Proctoring Anti-Cheat Active</span>
+                  </div>
+                  <p className="mt-0.5 text-[10px] text-slate-400 dark:text-zinc-500">
+                    Session fullscreen and tab switching are actively monitored and logged.
+                  </p>
+                </div>
+
+                {/* Verify Button */}
+                <button
+                  type="submit"
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 py-3.5 text-xs font-bold text-white shadow-subtle transition hover:bg-slate-800 active:scale-[0.99] dark:bg-zinc-100 dark:text-black dark:hover:bg-zinc-200"
+                >
+                  <span>Verify Credentials & Enter Examination</span>
+                  <ArrowRight className="h-4 w-4" />
+                </button>
+              </form>
             </div>
           </motion.div>
         )}
