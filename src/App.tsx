@@ -11,6 +11,8 @@ import { StudentPortal } from '@/components/StudentPortal';
 import { AdminLogin } from '@/components/AdminLogin';
 import { fetchQuestions, fetchStudentsWithSessions, fetchExamRooms } from '@/lib/queries';
 
+import { safeStorage } from '@/lib/storage';
+
 function App() {
   // Detect standalone Student vs Admin apps
   // Admin Portal: adminatexora.aarga.org OR /admin OR ?mode=admin
@@ -24,7 +26,7 @@ function App() {
 
   // Admin Authentication State
   const [isAdminAuthed, setIsAdminAuthed] = useState<boolean>(() => {
-    return localStorage.getItem('exora_admin_authed') === 'true';
+    return safeStorage.getItem('exora_admin_authed') === 'true';
   });
 
   const [section, setSection] = useState<Section>('dashboard');
@@ -34,10 +36,11 @@ function App() {
   const [loadingStudents, setLoadingStudents] = useState(true);
   const [loadingQuestions, setLoadingQuestions] = useState(true);
   const [loadingRooms, setLoadingRooms] = useState(true);
+  const [appApiError, setAppApiError] = useState<string | null>(null);
 
   // Theme state: Default 'light'
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
-    const saved = localStorage.getItem('exora_theme');
+    const saved = safeStorage.getItem('exora_theme');
     return saved === 'dark' ? 'dark' : 'light';
   });
 
@@ -48,57 +51,45 @@ function App() {
     } else {
       root.classList.remove('dark');
     }
-    localStorage.setItem('exora_theme', theme);
+    safeStorage.setItem('exora_theme', theme);
   }, [theme]);
 
   const toggleTheme = () => {
     setTheme((prev) => (prev === 'light' ? 'dark' : 'light'));
   };
 
-  const loadStudents = useCallback(async () => {
+  const loadAllData = useCallback(async () => {
     setLoadingStudents(true);
+    setLoadingQuestions(true);
+    setLoadingRooms(true);
+    setAppApiError(null);
+
     try {
-      const data = await fetchStudentsWithSessions();
-      setStudents(data);
-    } catch (e) {
-      console.error('Failed to load students', e);
+      const [sData, qData, rData] = await Promise.all([
+        fetchStudentsWithSessions(),
+        fetchQuestions(),
+        fetchExamRooms(),
+      ]);
+      setStudents(sData);
+      setQuestions(qData);
+      setRooms(rData);
+    } catch (e: any) {
+      console.error('Failed to load portal data', e);
+      setAppApiError(e?.message || 'Failed to connect to backend database.');
     } finally {
       setLoadingStudents(false);
-    }
-  }, []);
-
-  const loadQuestions = useCallback(async () => {
-    setLoadingQuestions(true);
-    try {
-      const data = await fetchQuestions();
-      setQuestions(data);
-    } catch (e) {
-      console.error('Failed to load questions', e);
-    } finally {
       setLoadingQuestions(false);
-    }
-  }, []);
-
-  const loadRooms = useCallback(async () => {
-    setLoadingRooms(true);
-    try {
-      const data = await fetchExamRooms();
-      setRooms(data);
-    } catch (e) {
-      console.error('Failed to load exam rooms', e);
-    } finally {
       setLoadingRooms(false);
     }
   }, []);
 
-  useEffect(() => {
-    loadStudents();
-    loadQuestions();
-    loadRooms();
-  }, [loadStudents, loadQuestions, loadRooms]);
+  const loadStudents = loadAllData;
+  const loadQuestions = loadAllData;
+  const loadRooms = loadAllData;
+
 
   function handleAdminLogout() {
-    localStorage.removeItem('exora_admin_authed');
+    safeStorage.removeItem('exora_admin_authed');
     setIsAdminAuthed(false);
   }
 
@@ -110,14 +101,15 @@ function App() {
           students={students}
           rooms={rooms}
           questions={questions}
-          onExamSubmitted={() => {
-            loadStudents();
-            loadRooms();
-          }}
+          onExamSubmitted={loadAllData}
+          apiError={appApiError}
+          onRetryFetch={loadAllData}
+          loading={loadingStudents || loadingQuestions || loadingRooms}
         />
       </div>
     );
   }
+
 
   return (
     <div className="relative min-h-screen bg-slate-50 text-slate-900 transition-colors duration-200 dark:bg-black dark:text-zinc-100">

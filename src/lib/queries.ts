@@ -103,13 +103,23 @@ export async function deleteExamRoom(id: string): Promise<void> {
 }
 
 export async function fetchQuestions(): Promise<Question[]> {
-  const { data, error } = await supabase
-    .from('questions')
-    .select('*')
-    .order('created_at', { ascending: false });
-  if (error) throw error;
-  return data ?? [];
+  try {
+    const { data, error } = await supabase
+      .from('questions')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('[SEB API Error] Supabase fetchQuestions failed:', error.message || error);
+      throw new Error(error.message || 'Database error while fetching questions.');
+    }
+    return data ?? [];
+  } catch (err: any) {
+    console.error('[SEB Fetch Exception]:', err);
+    throw err;
+  }
 }
+
 
 export type QuestionInput = Omit<Question, 'id' | 'created_at'>;
 

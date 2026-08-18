@@ -17,14 +17,16 @@ import {
   LogOut,
 } from 'lucide-react';
 import type { StudentWithSession, ExamRoom, Question } from '@/lib/types';
-import { submitExamSession, logProctoringIncident, matchStudentToRoom } from '@/lib/queries';
-import { Spinner } from './ui';
+import { safeStorage } from '@/lib/storage';
 
 interface StudentPortalProps {
   students: StudentWithSession[];
   rooms: ExamRoom[];
   questions: Question[];
   onExamSubmitted: () => void;
+  apiError?: string | null;
+  onRetryFetch?: () => void;
+  loading?: boolean;
 }
 
 type Stage = 'verify' | 'seb_check' | 'terms' | 'exam' | 'submitted';
@@ -91,6 +93,9 @@ export function StudentPortal({
   rooms,
   questions,
   onExamSubmitted,
+  apiError,
+  onRetryFetch,
+  loading = false,
 }: StudentPortalProps) {
   const [stage, setStage] = useState<Stage>('verify');
   const [registerNo, setRegisterNo] = useState('');
@@ -100,6 +105,7 @@ export function StudentPortal({
   const [activeStudent, setActiveStudent] = useState<StudentWithSession | null>(null);
   const [activeRoom, setActiveRoom] = useState<ExamRoom | null>(null);
   const [roomQuestions, setRoomQuestions] = useState<Question[]>([]);
+  const [usingFallbackQuestions, setUsingFallbackQuestions] = useState<boolean>(false);
 
   // Terms & Conditions Checkbox States
   const [chkIdentity, setChkIdentity] = useState(false);
@@ -120,6 +126,77 @@ export function StudentPortal({
     const ua = navigator.userAgent;
     return ua.includes('SEB') || ua.includes('SafeExamBrowser');
   }, []);
+
+  // Restore State from URL query parameters or safeStorage (Handles SEB page reloads cleanly)
+  useEffect(() => {
+    if (students.length === 0 || rooms.length === 0) return;
+
+    const searchParams = new URLSearchParams(window.location.search);
+    const urlReg = searchParams.get('reg') || safeStorage.getItem('exora_session_reg');
+    const urlRoom = searchParams.get('room') || safeStorage.getItem('exora_session_room');
+    const urlStage = (searchParams.get('stage') as Stage) || (safeStorage.getItem('exora_session_stage') as Stage);
+
+    if (urlReg && urlRoom) {
+      const studentMatch = students.find(
+        (s) => s.register_no.toLowerCase() === urlReg.toLowerCase(),
+      );
+      const roomMatch = rooms.find(
+        (r) => r.room_code.toLowerCase() === urlRoom.toLowerCase(),
+      );
+
+      if (studentMatch && roomMatch) {
+        setRegisterNo(studentMatch.register_no);
+        setRoomCode(roomMatch.room_code);
+        setActiveStudent(studentMatch);
+        setActiveRoom(roomMatch);
+
+        let qList = questions.filter((q) => q.room_id === roomMatch.id);
+        if (qList.length === 0) {
+          qList = questions.filter((q) => !q.room_id || q.room_id === '');
+        }
+        if (qList.length === 0) {
+          qList = DEFAULT_FALLBACK_QUESTIONS;
+          setUsingFallbackQuestions(true);
+        } else {
+          setUsingFallbackQuestions(false);
+        }
+        setRoomQuestions(qList);
+
+        const storageKey = `exora_start_${studentMatch.id}_${roomMatch.id}`;
+        const existingStart = safeStorage.getItem(storageKey);
+        let startTimestamp = Date.now();
+
+        if (existingStart) {
+          startTimestamp = Number(existingStart);
+        } else {
+          safeStorage.setItem(storageKey, String(startTimestamp));
+        }
+
+        const elapsedSeconds = Math.floor((Date.now() - startTimestamp) / 1000);
+        const totalSeconds = roomMatch.duration_minutes * 60;
+        let remainingSeconds = totalSeconds - elapsedSeconds;
+
+        if (remainingSeconds <= 0) {
+          startTimestamp = Date.now();
+          safeStorage.setItem(storageKey, String(startTimestamp));
+          remainingSeconds = totalSeconds;
+        }
+        setTimeLeft(remainingSeconds);
+
+        const savedAns = safeStorage.getJson<Record<string, number>>(
+          `exora_answers_${studentMatch.id}_${roomMatch.id}`,
+          {},
+        );
+        if (savedAns && Object.keys(savedAns).length > 0) {
+          setSelectedAnswers(savedAns);
+        }
+
+        if (urlStage) {
+          setStage(urlStage);
+        }
+      }
+    }
+  }, [students, rooms, questions]);
 
   // 1. Candidate Verification & Stage Transition Handler
   function handleVerifyCandidate() {
@@ -178,17 +255,20 @@ export function StudentPortal({
     }
     if (qList.length === 0) {
       qList = DEFAULT_FALLBACK_QUESTIONS;
+      setUsingFallbackQuestions(true);
+    } else {
+      setUsingFallbackQuestions(false);
     }
 
-    // Persistent Timer Calculation (handles exit & 2 min re-entry seamlessly)
+    // Persistent Timer Calculation (handles exit & re-entry seamlessly via safeStorage)
     const storageKey = `exora_start_${studentMatch.id}_${roomMatch.id}`;
-    const existingStart = localStorage.getItem(storageKey);
+    const existingStart = safeStorage.getItem(storageKey);
     let startTimestamp = Date.now();
 
     if (existingStart) {
       startTimestamp = Number(existingStart);
     } else {
-      localStorage.setItem(storageKey, String(startTimestamp));
+      safeStorage.setItem(storageKey, String(startTimestamp));
     }
 
     const elapsedSeconds = Math.floor((Date.now() - startTimestamp) / 1000);
@@ -198,7 +278,7 @@ export function StudentPortal({
     if (remainingSeconds <= 0) {
       // If student has not submitted in DB, reset stale local test timer
       startTimestamp = Date.now();
-      localStorage.setItem(storageKey, String(startTimestamp));
+      safeStorage.setItem(storageKey, String(startTimestamp));
       remainingSeconds = totalSeconds;
     }
 
@@ -207,20 +287,31 @@ export function StudentPortal({
     setRoomQuestions(qList);
     setTimeLeft(remainingSeconds);
 
-    // Proceed to SEB Check / Terms Stage
-    if (isSEBVerified) {
-      setStage('terms');
-    } else {
-      setStage('seb_check');
-    }
+    const targetStage: Stage = isSEBVerified ? 'terms' : 'seb_check';
+
+    // Store auth session tokens in safeStorage & sync URL query params for SEB
+    safeStorage.setItem('exora_session_reg', studentMatch.register_no);
+    safeStorage.setItem('exora_session_room', roomMatch.room_code);
+    safeStorage.setItem('exora_session_stage', targetStage);
+
+    const url = new URL(window.location.href);
+    url.searchParams.set('mode', 'student');
+    url.searchParams.set('reg', studentMatch.register_no);
+    url.searchParams.set('room', roomMatch.room_code);
+    url.searchParams.set('stage', targetStage);
+    window.history.replaceState({}, '', url.toString());
+
+    setStage(targetStage);
   }
 
   // Auto-transition to Terms when inside SEB
   useEffect(() => {
     if (stage === 'seb_check' && isSEBVerified) {
+      safeStorage.setItem('exora_session_stage', 'terms');
       setStage('terms');
     }
   }, [stage, isSEBVerified]);
+
 
   // Global Copy/Paste & ContextMenu Lockdown Hook (Active across all portal stages)
   useEffect(() => {
@@ -421,8 +512,39 @@ export function StudentPortal({
               </div>
             </div>
 
+            {/* SEB / Database API Diagnostic Banner */}
+
+            {apiError && (
+              <div className="rounded-2xl border border-rose-200 bg-rose-50/90 p-4 text-xs dark:border-rose-900/60 dark:bg-rose-950/50">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-2.5">
+                    <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-rose-600 dark:text-rose-400" />
+                    <div>
+                      <h4 className="font-bold text-rose-900 dark:text-rose-200">
+                        SEB Backend Database Connection Warning
+                      </h4>
+                      <p className="mt-0.5 text-rose-700 dark:text-rose-300">{apiError}</p>
+                      <p className="mt-1 text-[11px] text-rose-600 dark:text-rose-400">
+                        If Safe Exam Browser is blocking live API requests, standard exam questions will be loaded automatically via local diagnostic fallbacks.
+                      </p>
+                    </div>
+                  </div>
+                  {onRetryFetch && (
+                    <button
+                      onClick={onRetryFetch}
+                      disabled={loading}
+                      className="shrink-0 rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-bold text-white shadow hover:bg-rose-700 disabled:opacity-50"
+                    >
+                      {loading ? 'Retrying...' : 'Retry Connection'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Hero Grid: Login Card + Platform Features Bento Box */}
             <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
+
               {/* Left Column: Student Login Panel */}
               <div className="panel-card relative overflow-hidden rounded-3xl p-6 sm:p-8 lg:col-span-6">
                 <div className="border-b border-slate-100 pb-5 dark:border-zinc-800">
@@ -742,32 +864,64 @@ export function StudentPortal({
               </div>
             </div>
 
-            <div className="mt-6 flex items-center justify-between border-t border-slate-100 pt-4 dark:border-zinc-800">
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-t border-slate-100 pt-4 dark:border-zinc-800">
               <button
-                onClick={() => setStage('verify')}
+                onClick={() => {
+                  safeStorage.setItem('exora_session_stage', 'verify');
+                  setStage('verify');
+                }}
                 className="flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-white"
               >
                 <ArrowLeft className="h-4 w-4" /> Back
               </button>
 
-              <button
-                disabled={!(chkIdentity && chkMalpractice && chkTime)}
-                onClick={() => {
-                  setStage('exam');
-                  setTimeout(() => {
-                    try {
-                      if (document.documentElement.requestFullscreen) {
-                        document.documentElement.requestFullscreen().catch(() => {});
-                      }
-                    } catch (e) {}
-                  }, 100);
-                }}
-                className="flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-xs font-bold text-white shadow-subtle transition hover:bg-slate-800 disabled:opacity-40 active:scale-[0.98] dark:bg-zinc-100 dark:text-black dark:hover:bg-zinc-200"
-              >
-                <Maximize2 className="h-4 w-4 text-emerald-400 dark:text-emerald-600" />
-                <span>Start Examination (Enter Fullscreen)</span>
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  disabled={!(chkIdentity && chkMalpractice && chkTime)}
+                  onClick={() => {
+                    if (!activeStudent || !activeRoom) return;
+                    safeStorage.setItem('exora_session_stage', 'exam');
+                    const url = new URL(window.location.href);
+                    url.searchParams.set('mode', 'student');
+                    url.searchParams.set('stage', 'exam');
+                    url.searchParams.set('reg', activeStudent.register_no);
+                    url.searchParams.set('room', activeRoom.room_code);
+                    window.location.href = url.toString();
+                  }}
+                  className="flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3.5 py-3 text-xs font-bold text-slate-800 transition hover:bg-slate-50 disabled:opacity-40 dark:border-zinc-700 dark:bg-pitch-900 dark:text-zinc-200"
+                  title="Reload page to force SEB engine top-level document loading"
+                >
+                  <span>Full Page SEB Reload</span>
+                </button>
+
+                <button
+                  disabled={!(chkIdentity && chkMalpractice && chkTime)}
+                  onClick={() => {
+                    if (!activeStudent || !activeRoom) return;
+                    safeStorage.setItem('exora_session_stage', 'exam');
+                    const url = new URL(window.location.href);
+                    url.searchParams.set('mode', 'student');
+                    url.searchParams.set('stage', 'exam');
+                    url.searchParams.set('reg', activeStudent.register_no);
+                    url.searchParams.set('room', activeRoom.room_code);
+                    window.history.replaceState({}, '', url.toString());
+                    setStage('exam');
+                    setTimeout(() => {
+                      try {
+                        if (document.documentElement.requestFullscreen) {
+                          document.documentElement.requestFullscreen().catch(() => {});
+                        }
+                      } catch (e) {}
+                    }, 100);
+                  }}
+                  className="flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-xs font-bold text-white shadow-subtle transition hover:bg-slate-800 disabled:opacity-40 active:scale-[0.98] dark:bg-zinc-100 dark:text-black dark:hover:bg-zinc-200"
+                >
+                  <Maximize2 className="h-4 w-4 text-emerald-400 dark:text-emerald-600" />
+                  <span>Start Examination (Enter Fullscreen)</span>
+                </button>
+              </div>
             </div>
+
           </motion.div>
         )}
 
@@ -848,6 +1002,14 @@ export function StudentPortal({
                       'Are you sure you want to Exit Exam? Your timer will continue running in the background until time expires.',
                     );
                     if (confirmExit) {
+                      safeStorage.removeItem('exora_session_reg');
+                      safeStorage.removeItem('exora_session_room');
+                      safeStorage.removeItem('exora_session_stage');
+                      const url = new URL(window.location.href);
+                      url.searchParams.delete('stage');
+                      url.searchParams.delete('reg');
+                      url.searchParams.delete('room');
+                      window.history.replaceState({}, '', url.toString());
                       setStage('verify');
                       setActiveStudent(null);
                       setActiveRoom(null);
@@ -861,6 +1023,14 @@ export function StudentPortal({
                 </button>
               </div>
             </div>
+
+            {/* Offline Fallback Questions Badge */}
+            {usingFallbackQuestions && (
+              <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-xs font-semibold text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300">
+                <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                <span>Offline / Diagnostic Fallback Question Set Active (SEB Safe Mode)</span>
+              </div>
+            )}
 
             {/* Question Workspace Layout */}
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
@@ -887,18 +1057,28 @@ export function StudentPortal({
                       return (
                         <button
                           key={optIdx}
-                          onClick={() =>
-                            setSelectedAnswers((prev) => ({
-                              ...prev,
-                              [currentQ.id]: optIdx,
-                            }))
-                          }
+                          onClick={() => {
+                            setSelectedAnswers((prev) => {
+                              const nextAns = {
+                                ...prev,
+                                [currentQ.id]: optIdx,
+                              };
+                              if (activeStudent && activeRoom) {
+                                safeStorage.setJson(
+                                  `exora_answers_${activeStudent.id}_${activeRoom.id}`,
+                                  nextAns,
+                                );
+                              }
+                              return nextAns;
+                            });
+                          }}
                           className={`flex w-full items-center gap-3.5 rounded-xl border p-3.5 text-left text-xs font-medium transition ${
                             isSelected
                               ? 'border-slate-900 bg-slate-900 text-white shadow-subtle dark:border-zinc-100 dark:bg-zinc-100 dark:text-black'
                               : 'border-slate-200/80 bg-white text-slate-700 hover:bg-slate-50 dark:border-zinc-800 dark:bg-pitch-900 dark:text-zinc-300 dark:hover:bg-zinc-900'
                           }`}
                         >
+
                           <span
                             className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md font-mono text-xs font-bold ${
                               isSelected
