@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import type { ExamRoom, StudentWithSession, Question } from '@/lib/types';
 import { Skeleton, Spinner } from './ui';
-import { createExamRoom, deleteExamRoom, createQuestion, deleteQuestion, type ExamRoomInput } from '@/lib/queries';
+import { createExamRoom, deleteExamRoom, createQuestion, deleteQuestion, matchStudentToRoom, type ExamRoomInput } from '@/lib/queries';
 
 interface RoomsProps {
   rooms: ExamRoom[];
@@ -316,20 +316,7 @@ export function Rooms({
   );
 }
 
-export function matchStudentToRoom(student: StudentWithSession, room: ExamRoom): boolean {
-  const sDept = (student.department || 'Computer Science').toLowerCase().trim();
-  const rDept = room.department.toLowerCase().trim();
-  const sYr = Number(student.year) || 1;
-  const rYr = Number(room.year);
-  const sSem = Number(student.semester) || 1;
-  const rSem = Number(room.semester);
 
-  const deptMatches = sDept === rDept || sDept.includes(rDept) || rDept.includes(sDept);
-  const yrMatches = sYr === rYr;
-  const semMatches = sSem === rSem;
-
-  return deptMatches && yrMatches && semMatches;
-}
 
 function RoomWorkspaceModal({
   room,

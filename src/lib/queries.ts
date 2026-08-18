@@ -222,6 +222,21 @@ export async function logProctoringIncident(input: {
   });
 }
 
+export function matchStudentToRoom(student: StudentWithSession, room: ExamRoom): boolean {
+  const sDept = (student.department || 'Computer Science').toLowerCase().trim();
+  const rDept = room.department.toLowerCase().trim();
+  const sYr = Number(student.year) || 1;
+  const rYr = Number(room.year);
+  const sSem = Number(student.semester) || 1;
+  const rSem = Number(room.semester);
+
+  const deptMatches = sDept === rDept || sDept.includes(rDept) || rDept.includes(sDept);
+  const yrMatches = sYr === rYr;
+  const semMatches = sSem === rSem;
+
+  return deptMatches && yrMatches && semMatches;
+}
+
 
 
 

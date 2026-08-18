@@ -17,8 +17,7 @@ import {
   LogOut,
 } from 'lucide-react';
 import type { StudentWithSession, ExamRoom, Question } from '@/lib/types';
-import { matchStudentToRoom } from './Rooms';
-import { submitExamSession, logProctoringIncident } from '@/lib/queries';
+import { submitExamSession, logProctoringIncident, matchStudentToRoom } from '@/lib/queries';
 import { Spinner } from './ui';
 
 interface StudentPortalProps {
