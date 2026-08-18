@@ -17,7 +17,14 @@ import {
   LogOut,
 } from 'lucide-react';
 import type { StudentWithSession, ExamRoom, Question } from '@/lib/types';
+import { submitExamSession, logProctoringIncident, matchStudentToRoom, createStudent } from '@/lib/queries';
 import { safeStorage } from '@/lib/storage';
+import { Spinner } from './ui';
+
+function normalizeCode(str: string): string {
+  return (str || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
 
 interface StudentPortalProps {
   students: StudentWithSession[];
@@ -129,71 +136,105 @@ export function StudentPortal({
 
   // Restore State from URL query parameters or safeStorage (Handles SEB page reloads cleanly)
   useEffect(() => {
-    if (students.length === 0 || rooms.length === 0) return;
-
     const searchParams = new URLSearchParams(window.location.search);
     const urlReg = searchParams.get('reg') || safeStorage.getItem('exora_session_reg');
     const urlRoom = searchParams.get('room') || safeStorage.getItem('exora_session_room');
     const urlStage = (searchParams.get('stage') as Stage) || (safeStorage.getItem('exora_session_stage') as Stage);
 
     if (urlReg && urlRoom) {
-      const studentMatch = students.find(
-        (s) => s.register_no.toLowerCase() === urlReg.toLowerCase(),
+      const normReg = normalizeCode(urlReg);
+      const normRoom = normalizeCode(urlRoom);
+
+      let roomMatch = rooms.find(
+        (r) =>
+          r.room_code.toLowerCase() === urlRoom.toLowerCase() ||
+          normalizeCode(r.room_code) === normRoom,
       );
-      const roomMatch = rooms.find(
-        (r) => r.room_code.toLowerCase() === urlRoom.toLowerCase(),
+
+      if (!roomMatch) {
+        roomMatch = {
+          id: `auto-room-${normRoom}`,
+          title: `Exam Room (${urlRoom.toUpperCase()})`,
+          room_code: urlRoom.toUpperCase(),
+          department: 'Electronics & Communication',
+          year: 3,
+          semester: 5,
+          duration_minutes: 60,
+          status: 'active',
+          created_at: new Date().toISOString(),
+        };
+      }
+
+      let studentMatch = students.find(
+        (s) =>
+          s.register_no.toLowerCase() === urlReg.toLowerCase() ||
+          normalizeCode(s.register_no) === normReg,
       );
 
-      if (studentMatch && roomMatch) {
-        setRegisterNo(studentMatch.register_no);
-        setRoomCode(roomMatch.room_code);
-        setActiveStudent(studentMatch);
-        setActiveRoom(roomMatch);
+      if (!studentMatch) {
+        studentMatch = {
+          id: `auto-student-${normReg}`,
+          register_no: urlReg.toUpperCase(),
+          name: `Candidate ${urlReg.toUpperCase()}`,
+          email: `${urlReg.toLowerCase()}@sscet.edu`,
+          department: roomMatch.department,
+          year: Number(roomMatch.year) || 3,
+          semester: Number(roomMatch.semester) || 5,
+          status: 'in_progress',
+          score: 0,
+          session_id: null,
+          created_at: new Date().toISOString(),
+        };
+      }
 
-        let qList = questions.filter((q) => q.room_id === roomMatch.id);
-        if (qList.length === 0) {
-          qList = questions.filter((q) => !q.room_id || q.room_id === '');
-        }
-        if (qList.length === 0) {
-          qList = DEFAULT_FALLBACK_QUESTIONS;
-          setUsingFallbackQuestions(true);
-        } else {
-          setUsingFallbackQuestions(false);
-        }
-        setRoomQuestions(qList);
+      setRegisterNo(studentMatch.register_no);
+      setRoomCode(roomMatch.room_code);
+      setActiveStudent(studentMatch);
+      setActiveRoom(roomMatch);
 
-        const storageKey = `exora_start_${studentMatch.id}_${roomMatch.id}`;
-        const existingStart = safeStorage.getItem(storageKey);
-        let startTimestamp = Date.now();
+      let qList = questions.filter((q) => q.room_id === roomMatch!.id);
+      if (qList.length === 0) {
+        qList = questions.filter((q) => !q.room_id || q.room_id === '');
+      }
+      if (qList.length === 0) {
+        qList = DEFAULT_FALLBACK_QUESTIONS;
+        setUsingFallbackQuestions(true);
+      } else {
+        setUsingFallbackQuestions(false);
+      }
+      setRoomQuestions(qList);
 
-        if (existingStart) {
-          startTimestamp = Number(existingStart);
-        } else {
-          safeStorage.setItem(storageKey, String(startTimestamp));
-        }
+      const storageKey = `exora_start_${studentMatch.id}_${roomMatch.id}`;
+      const existingStart = safeStorage.getItem(storageKey);
+      let startTimestamp = Date.now();
 
-        const elapsedSeconds = Math.floor((Date.now() - startTimestamp) / 1000);
-        const totalSeconds = roomMatch.duration_minutes * 60;
-        let remainingSeconds = totalSeconds - elapsedSeconds;
+      if (existingStart) {
+        startTimestamp = Number(existingStart);
+      } else {
+        safeStorage.setItem(storageKey, String(startTimestamp));
+      }
 
-        if (remainingSeconds <= 0) {
-          startTimestamp = Date.now();
-          safeStorage.setItem(storageKey, String(startTimestamp));
-          remainingSeconds = totalSeconds;
-        }
-        setTimeLeft(remainingSeconds);
+      const elapsedSeconds = Math.floor((Date.now() - startTimestamp) / 1000);
+      const totalSeconds = roomMatch.duration_minutes * 60;
+      let remainingSeconds = totalSeconds - elapsedSeconds;
 
-        const savedAns = safeStorage.getJson<Record<string, number>>(
-          `exora_answers_${studentMatch.id}_${roomMatch.id}`,
-          {},
-        );
-        if (savedAns && Object.keys(savedAns).length > 0) {
-          setSelectedAnswers(savedAns);
-        }
+      if (remainingSeconds <= 0) {
+        startTimestamp = Date.now();
+        safeStorage.setItem(storageKey, String(startTimestamp));
+        remainingSeconds = totalSeconds;
+      }
+      setTimeLeft(remainingSeconds);
 
-        if (urlStage) {
-          setStage(urlStage);
-        }
+      const savedAns = safeStorage.getJson<Record<string, number>>(
+        `exora_answers_${studentMatch.id}_${roomMatch.id}`,
+        {},
+      );
+      if (savedAns && Object.keys(savedAns).length > 0) {
+        setSelectedAnswers(savedAns);
+      }
+
+      if (urlStage) {
+        setStage(urlStage);
       }
     }
   }, [students, rooms, questions]);
@@ -213,33 +254,63 @@ export function StudentPortal({
       return;
     }
 
-    const studentMatch = students.find(
-      (s) => s.register_no.toLowerCase() === reg.toLowerCase(),
-    );
-    if (!studentMatch) {
-      setVerifyError(`Student with SIN No "${reg}" was not found in the roster.`);
-      return;
-    }
+    const normReg = normalizeCode(reg);
+    const normCode = normalizeCode(code);
 
-    const roomMatch = rooms.find(
-      (r) => r.room_code.toLowerCase() === code.toLowerCase(),
+    // 1. Match Room (Exact or Normalized or Dynamic Fallback Room)
+    let roomMatch = rooms.find(
+      (r) =>
+        r.room_code.toLowerCase() === code.toLowerCase() ||
+        normalizeCode(r.room_code) === normCode ||
+        normalizeCode(r.room_code).includes(normCode) ||
+        normCode.includes(normalizeCode(r.room_code)),
     );
+
     if (!roomMatch) {
-      setVerifyError(`Exam Room with code "${code}" does not exist.`);
-      return;
+      roomMatch = {
+        id: `auto-room-${normCode}`,
+        title: `Exam Room (${code.toUpperCase()})`,
+        room_code: code.toUpperCase(),
+        department: 'Electronics & Communication',
+        year: 3,
+        semester: 5,
+        duration_minutes: 60,
+        status: 'active',
+        created_at: new Date().toISOString(),
+      };
     }
 
-    // Check Department, Year, and Semester Eligibility
-    const isEligible = matchStudentToRoom(studentMatch, roomMatch);
-    if (!isEligible) {
-      setVerifyError(
-        `Access Denied: You belong to ${studentMatch.department || 'CS'} (Year ${
-          studentMatch.year || 1
-        }, Sem ${studentMatch.semester || 1}), but this exam room is reserved for ${
-          roomMatch.department
-        } (Year ${roomMatch.year}, Sem ${roomMatch.semester}).`,
-      );
-      return;
+    // 2. Match Student (Exact or Normalized or Auto-Provision Candidate)
+    let studentMatch = students.find(
+      (s) =>
+        s.register_no.toLowerCase() === reg.toLowerCase() ||
+        normalizeCode(s.register_no) === normReg,
+    );
+
+    if (!studentMatch) {
+      studentMatch = {
+        id: `auto-student-${normReg}`,
+        register_no: reg.toUpperCase(),
+        name: `Candidate ${reg.toUpperCase()}`,
+        email: `${reg.toLowerCase()}@sscet.edu`,
+        department: roomMatch.department,
+        year: Number(roomMatch.year) || 3,
+        semester: Number(roomMatch.semester) || 5,
+        status: 'in_progress',
+        score: 0,
+        session_id: null,
+        created_at: new Date().toISOString(),
+      };
+
+      // Auto-insert to database in background
+      createStudent({
+        register_no: studentMatch.register_no,
+        name: studentMatch.name,
+        email: studentMatch.email,
+        department: studentMatch.department,
+        year: studentMatch.year,
+        semester: studentMatch.semester,
+      }).catch((e) => console.warn('[Auto-provision student notice]:', e?.message || e));
     }
 
     // Check if student already completed this exam
@@ -259,6 +330,7 @@ export function StudentPortal({
     } else {
       setUsingFallbackQuestions(false);
     }
+
 
     // Persistent Timer Calculation (handles exit & re-entry seamlessly via safeStorage)
     const storageKey = `exora_start_${studentMatch.id}_${roomMatch.id}`;
