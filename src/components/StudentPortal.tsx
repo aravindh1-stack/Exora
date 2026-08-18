@@ -133,11 +133,13 @@ export function StudentPortal({
 
     const elapsedSeconds = Math.floor((Date.now() - startTimestamp) / 1000);
     const totalSeconds = roomMatch.duration_minutes * 60;
-    const remainingSeconds = totalSeconds - elapsedSeconds;
+    let remainingSeconds = totalSeconds - elapsedSeconds;
 
     if (remainingSeconds <= 0) {
-      setVerifyError('Exam time limit has expired for your session.');
-      return;
+      // If student has not submitted in DB, reset stale local test timer
+      startTimestamp = Date.now();
+      localStorage.setItem(storageKey, String(startTimestamp));
+      remainingSeconds = totalSeconds;
     }
 
     setActiveStudent(studentMatch);
@@ -692,9 +694,13 @@ export function StudentPortal({
                 disabled={!(chkIdentity && chkMalpractice && chkTime)}
                 onClick={() => {
                   setStage('exam');
-                  if (document.documentElement.requestFullscreen) {
-                    document.documentElement.requestFullscreen().catch(() => {});
-                  }
+                  setTimeout(() => {
+                    try {
+                      if (document.documentElement.requestFullscreen) {
+                        document.documentElement.requestFullscreen().catch(() => {});
+                      }
+                    } catch (e) {}
+                  }, 100);
                 }}
                 className="flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-xs font-bold text-white shadow-subtle transition hover:bg-slate-800 disabled:opacity-40 active:scale-[0.98] dark:bg-zinc-100 dark:text-black dark:hover:bg-zinc-200"
               >
