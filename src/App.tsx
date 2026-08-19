@@ -124,9 +124,6 @@ function App() {
             setIsAdminAuthed(true);
             setViewMode('admin_console');
           }}
-          onBackToLanding={() => {
-            window.location.href = 'https://exora.aarga.org';
-          }}
         />
       );
     }
@@ -137,9 +134,6 @@ function App() {
       return (
         <LandingPage
           onEnterPortal={() => setViewMode('student_auth')}
-          onEnterAdmin={() => {
-            window.location.href = 'https://poweratex.aarga.org';
-          }}
         />
       );
     }
