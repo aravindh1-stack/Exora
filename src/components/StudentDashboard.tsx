@@ -23,7 +23,7 @@ import {
 import type { StudentWithSession, ExamRoom, Question } from '@/lib/types';
 import { matchStudentToRoom, fetchStudentResponses, type ExamResponseDetail } from '@/lib/queries';
 import { initials, formatTimeAgo } from '@/lib/format';
-import { Spinner } from './ui';
+import { safeStorage } from '@/lib/storage';
 
 import { MyQuizzes } from './MyQuizzes';
 
@@ -61,6 +61,13 @@ export function StudentDashboard({
   const [reviewResponses, setReviewResponses] = useState<ExamResponseDetail[]>([]);
   const [reviewRoom, setReviewRoom] = useState<ExamRoom | null>(null);
 
+  // Notification Popover & Persistence State
+  const [notifOpen, setNotifOpen] = useState(false);
+  const notifStorageKey = `exora_notif_read_${student.id}`;
+  const [readNotifIds, setReadNotifIds] = useState<string[]>(() => {
+    return safeStorage.getJson<string[]>(notifStorageKey, []);
+  });
+
   // 1. All active rooms matching candidate's department, year, semester
   const allEligibleRooms = useMemo(
     () => rooms.filter((r) => matchStudentToRoom(student, r) && r.status === 'active'),
@@ -80,6 +87,83 @@ export function StudentDashboard({
 
   const hasPendingQuiz = pendingRooms.length > 0;
   const hasHistory = student.status !== 'in_progress' && Boolean(student.session_id);
+
+  // Dynamic Notification Items Feed
+  const notifications = useMemo(() => {
+    const list = [
+      {
+        id: 'n1',
+        title: 'Session Authenticated',
+        message: `Recently logged in on this device as ${student.name} (${student.register_no}).`,
+        time: 'Just now',
+        icon: ShieldCheck,
+        iconColor: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/50 dark:text-emerald-400',
+      },
+    ];
+
+    if (pendingRooms.length > 0) {
+      list.push({
+        id: 'n2',
+        title: 'Active Quiz Available',
+        message: `You have ${pendingRooms.length} active department quiz (${pendingRooms[0]?.title || 'Pending Exam'}) live right now.`,
+        time: '2m ago',
+        icon: Zap,
+        iconColor: 'text-amber-600 bg-amber-50 dark:bg-amber-950/50 dark:text-amber-400',
+      });
+    } else {
+      list.push({
+        id: 'n2',
+        title: 'All Quizzes Completed',
+        message: 'You have completed all assigned department exams for this semester.',
+        time: '5m ago',
+        icon: CheckCircle2,
+        iconColor: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/50 dark:text-emerald-400',
+      });
+    }
+
+    if (student.status === 'completed' && student.score > 0) {
+      list.push({
+        id: 'n3',
+        title: 'Exam Score Recorded',
+        message: `Achieved ${student.score}% overall score percentage in latest unit assessment.`,
+        time: '12m ago',
+        icon: Award,
+        iconColor: 'text-brand-950 bg-brand-50 dark:bg-zinc-900 dark:text-white',
+      });
+    } else if (student.status === 'flagged') {
+      list.push({
+        id: 'n3',
+        title: 'Proctoring Warning Alert',
+        message: 'Exam session automatically flagged for window minimization or tab switching.',
+        time: '10m ago',
+        icon: Flag,
+        iconColor: 'text-rose-600 bg-rose-50 dark:bg-rose-950/50 dark:text-rose-400',
+      });
+    }
+
+    return list;
+  }, [student, pendingRooms]);
+
+  // Calculate unread notification count
+  const unreadCount = useMemo(() => {
+    return notifications.filter((n) => !readNotifIds.includes(n.id)).length;
+  }, [notifications, readNotifIds]);
+
+  // Mark all notifications as read & persist to safeStorage
+  const handleMarkAllRead = () => {
+    const allIds = notifications.map((n) => n.id);
+    setReadNotifIds(allIds);
+    safeStorage.setJson(notifStorageKey, allIds);
+  };
+
+  // Mark single notification as read & persist to safeStorage
+  const handleMarkSingleRead = (id: string) => {
+    if (!readNotifIds.includes(id)) {
+      const updated = [...readNotifIds, id];
+      setReadNotifIds(updated);
+      safeStorage.setJson(notifStorageKey, updated);
+    }
+  };
 
   async function handleOpenReviewModal(room?: ExamRoom) {
     if (!student.session_id) return;
@@ -149,7 +233,7 @@ export function StudentDashboard({
     <div className="flex min-h-screen bg-[#f7f8fa] text-brand-950 dark:bg-[#08090b] dark:text-zinc-100">
       {/* Sidebar */}
       <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-brand-200/70 bg-white dark:border-zinc-800/70 dark:bg-[#0a0b0d] md:flex">
-        <div className="flex items-center gap-3 px-6 py-6 border-b border-brand-100 dark:border-zinc-800/60">
+        <div className="flex h-16 shrink-0 items-center gap-3 px-6 border-b border-brand-200/70 dark:border-zinc-800/70">
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-950 text-white dark:bg-white dark:text-brand-950 shadow-subtle">
             <ShieldCheck className="h-5 w-5" strokeWidth={2} />
           </div>
@@ -203,15 +287,6 @@ export function StudentDashboard({
             </p>
           </div>
 
-          {onLogout && (
-            <button
-              onClick={onLogout}
-              className="flex w-full items-center justify-center gap-2 rounded-xl border border-rose-200 bg-rose-50/60 py-2.5 text-xs font-bold text-rose-700 transition hover:bg-rose-100 dark:border-rose-900/60 dark:bg-rose-950/30 dark:text-rose-300"
-            >
-              <LogOut className="h-3.5 w-3.5" />
-              <span>Sign Out Student</span>
-            </button>
-          )}
         </div>
       </aside>
 
@@ -229,14 +304,99 @@ export function StudentDashboard({
           </div>
 
           <div className="flex items-center gap-3">
-            <button className="relative rounded-xl border border-brand-200 bg-brand-50/70 p-2 text-brand-600 transition hover:bg-brand-100/70 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800">
-              <Bell className="h-4 w-4" />
-              {pendingRooms.length > 0 && (
-                <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-rose-500" />
-              )}
-            </button>
+            {/* Notification Bell Dropdown Popover */}
+            <div className="relative">
+              <button
+                onClick={() => setNotifOpen(!notifOpen)}
+                className="relative rounded-xl border border-brand-200 bg-brand-50/70 p-2 text-brand-600 transition hover:bg-brand-100/70 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 cursor-pointer"
+                title="Notifications"
+              >
+                <Bell className="h-4 w-4" />
+                {unreadCount > 0 && (
+                  <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[9px] font-bold text-white shadow-sm">
+                    {unreadCount}
+                  </span>
+                )}
+              </button>
 
-            <div className="flex items-center gap-2.5 rounded-xl border border-brand-200 bg-brand-50/70 py-1 pl-1.5 pr-3 dark:border-zinc-800 dark:bg-zinc-900">
+              <AnimatePresence>
+                {notifOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 8, scale: 0.96 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 8, scale: 0.96 }}
+                    transition={{ duration: 0.15 }}
+                    className="absolute right-0 mt-2.5 w-80 sm:w-96 rounded-2xl border border-brand-200/80 bg-white p-4 shadow-elevated dark:border-zinc-800 dark:bg-[#0c0d10] z-50"
+                  >
+                    <div className="flex items-center justify-between border-b border-brand-100 pb-3 dark:border-zinc-800">
+                      <div className="flex items-center gap-2">
+                        <Bell className="h-4 w-4 text-brand-950 dark:text-white" />
+                        <h4 className="font-display text-xs font-bold text-brand-950 dark:text-white">
+                          Notifications &amp; Activity Log
+                        </h4>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {unreadCount > 0 && (
+                          <button
+                            onClick={handleMarkAllRead}
+                            className="text-[10px] font-semibold text-brand-500 hover:text-brand-950 dark:text-zinc-400 dark:hover:text-white"
+                          >
+                            Mark all read
+                          </button>
+                        )}
+                        <button
+                          onClick={() => setNotifOpen(false)}
+                          className="rounded-lg p-1 text-brand-400 hover:bg-brand-50 hover:text-brand-950 dark:text-zinc-500 dark:hover:bg-zinc-900 dark:hover:text-white"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 max-h-80 space-y-2.5 overflow-y-auto pr-1">
+                      {notifications.map((n) => {
+                        const Icon = n.icon;
+                        const isRead = readNotifIds.includes(n.id);
+                        return (
+                          <div
+                            key={n.id}
+                            onClick={() => handleMarkSingleRead(n.id)}
+                            className={`flex items-start gap-3 rounded-xl border p-3 transition cursor-pointer ${
+                              isRead
+                                ? 'border-brand-100/40 bg-slate-50/50 opacity-60 dark:border-zinc-800/40 dark:bg-zinc-950/30'
+                                : 'border-brand-100/80 bg-brand-50/40 hover:bg-brand-50 dark:border-zinc-800/80 dark:bg-zinc-950/60 dark:hover:bg-zinc-900/60'
+                            }`}
+                          >
+                            <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${n.iconColor}`}>
+                              <Icon className="h-4 w-4" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center justify-between gap-1">
+                                <h5 className="text-xs font-bold text-brand-950 dark:text-white truncate">
+                                  {n.title}
+                                </h5>
+                                <span className="text-[10px] text-brand-400 dark:text-zinc-500 shrink-0">
+                                  {n.time}
+                                </span>
+                              </div>
+                              <p className="mt-0.5 text-[11px] leading-relaxed text-brand-600 dark:text-zinc-300">
+                                {n.message}
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            <button
+              onClick={() => setNav('profile')}
+              className="flex items-center gap-2.5 rounded-xl border border-brand-200 bg-brand-50/70 py-1 pl-1.5 pr-3 transition hover:bg-brand-100/80 active:scale-[0.98] dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800 cursor-pointer"
+              title="View Candidate Profile"
+            >
               <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-950 text-[11px] font-bold text-white dark:bg-white dark:text-brand-950">
                 {initials(student.name)}
               </div>
@@ -246,17 +406,7 @@ export function StudentDashboard({
                   {student.register_no}
                 </p>
               </div>
-            </div>
-
-            {onLogout && (
-              <button
-                onClick={onLogout}
-                className="flex items-center justify-center rounded-xl border border-rose-200 bg-rose-50 p-2 text-rose-700 hover:bg-rose-100 md:hidden dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-300"
-                title="Sign Out"
-              >
-                <LogOut className="h-4 w-4" />
-              </button>
-            )}
+            </button>
           </div>
         </header>
 
@@ -302,9 +452,31 @@ export function StudentDashboard({
             </div>
           ) : nav === 'profile' ? (
             <div className="panel-card space-y-6 p-6 dark:bg-[#0c0d10]">
-              <h3 className="font-display text-lg font-bold text-brand-950 dark:text-white">
-                Student Profile &amp; Verification Details
-              </h3>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-brand-100 pb-5 dark:border-zinc-800">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-950 text-white dark:bg-white dark:text-brand-950 shadow-subtle">
+                    <UserCircle className="h-7 w-7" />
+                  </div>
+                  <div>
+                    <h3 className="font-display text-lg font-bold text-brand-950 dark:text-white">
+                      Student Profile &amp; Verification Details
+                    </h3>
+                    <p className="text-xs text-brand-500 dark:text-zinc-400">
+                      Manage your session security and candidate identification
+                    </p>
+                  </div>
+                </div>
+
+                {onLogout && (
+                  <button
+                    onClick={onLogout}
+                    className="flex items-center justify-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-xs font-bold text-rose-700 transition hover:bg-rose-100 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-300 shadow-sm"
+                  >
+                    <LogOut className="h-4 w-4" />
+                    <span>Sign Out Student Session</span>
+                  </button>
+                )}
+              </div>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div className="space-y-1">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-brand-400 dark:text-zinc-500">
