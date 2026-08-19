@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ShieldCheck, Bell, Search, Sun, Moon, LogOut } from 'lucide-react';
+import { ShieldCheck, Bell, Search, Sun, Moon, LogOut, ChevronDown, CheckCircle2, Activity, User } from 'lucide-react';
 import type { Section, Question, StudentWithSession, ExamRoom } from '@/lib/types';
 import { Sidebar, MobileNav } from '@/components/Sidebar';
 import { Dashboard } from '@/components/Dashboard';
@@ -29,6 +29,10 @@ function App() {
     hostname.includes('admin') ||
     pathname.startsWith('/admin') ||
     search.includes('mode=admin');
+
+  // Admin Dropdown States
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
 
   // Admin Authentication State
   const [isAdminAuthed, setIsAdminAuthed] = useState<boolean>(() => {
@@ -230,33 +234,132 @@ function App() {
                 </kbd>
               </button>
 
-              <button className="relative rounded-xl border border-brand-200 bg-brand-50/70 p-2 text-brand-600 transition hover:bg-brand-100/80 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800">
-                <Bell className="h-4 w-4" />
-                <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-rose-500" />
-              </button>
+              {/* Notification Bell Dropdown */}
+              <div className="relative">
+                <button
+                  onClick={() => {
+                    setShowNotifications((prev) => !prev);
+                    setShowProfileMenu(false);
+                  }}
+                  className="relative rounded-xl border border-brand-200 bg-brand-50/70 p-2 text-brand-600 transition hover:bg-brand-100/80 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 cursor-pointer"
+                  title="Notifications & Incident Alerts"
+                >
+                  <Bell className="h-4 w-4" />
+                  <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-rose-500 animate-pulse" />
+                </button>
 
-              <div className="flex items-center gap-2 rounded-xl border border-brand-200 bg-brand-50/70 py-1 pl-1 pr-2.5 dark:border-zinc-800 dark:bg-zinc-900">
-                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-950 text-xs font-semibold text-white dark:bg-zinc-100 dark:text-black">
-                  AD
-                </div>
-                <div className="hidden text-left sm:block">
-                  <p className="text-xs font-bold text-brand-950 dark:text-zinc-100">
-                    ece@quizportal
-                  </p>
-                  <p className="text-[10px] text-brand-500 dark:text-zinc-400">
-                    Proctor Admin
-                  </p>
-                </div>
+                <AnimatePresence>
+                  {showNotifications && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 8, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 8, scale: 0.95 }}
+                      className="absolute right-0 top-12 z-50 w-80 rounded-2xl border border-slate-200 bg-white p-4 shadow-xl dark:border-zinc-800 dark:bg-[#0c0d10]"
+                    >
+                      <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-zinc-800/80">
+                        <div className="flex items-center gap-2">
+                          <Activity className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                          <h4 className="text-xs font-bold text-slate-900 dark:text-white">Proctor Notifications</h4>
+                        </div>
+                        <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                          Live Active
+                        </span>
+                      </div>
+
+                      <div className="mt-3 space-y-2.5">
+                        <div className="flex items-start gap-2.5 rounded-xl bg-slate-50 p-2.5 dark:bg-zinc-900/60">
+                          <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
+                          <div>
+                            <p className="text-xs font-bold text-slate-900 dark:text-white">Proctor Telemetry Active</p>
+                            <p className="text-[11px] text-slate-500 dark:text-zinc-400">All exam rooms connected to real-time RLS monitoring.</p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-start gap-2.5 rounded-xl bg-slate-50 p-2.5 dark:bg-zinc-900/60">
+                          <ShieldCheck className="h-4 w-4 text-brand-600 dark:text-brand-400 shrink-0 mt-0.5" />
+                          <div>
+                            <p className="text-xs font-bold text-slate-900 dark:text-white">Auto-Grading Engine Operational</p>
+                            <p className="text-[11px] text-slate-500 dark:text-zinc-400">Instant PDF reports & roster evaluation ready.</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => setShowNotifications(false)}
+                        className="mt-3 w-full rounded-xl border border-slate-200 bg-slate-50 py-1.5 text-center text-[11px] font-bold text-slate-700 hover:bg-slate-100 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 cursor-pointer"
+                      >
+                        Dismiss All Alerts
+                      </button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
 
-              <button
-                onClick={handleAdminLogout}
-                className="flex items-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-300"
-                title="Logout Admin"
-              >
-                <LogOut className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Logout</span>
-              </button>
+              {/* Profile Dropdown Badge (With Logout Inside) */}
+              <div className="relative">
+                <button
+                  onClick={() => {
+                    setShowProfileMenu((prev) => !prev);
+                    setShowNotifications(false);
+                  }}
+                  className="flex items-center gap-2 rounded-xl border border-brand-200 bg-brand-50/70 py-1 pl-1 pr-2.5 transition hover:border-brand-300 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700 cursor-pointer"
+                >
+                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-950 text-xs font-semibold text-white dark:bg-zinc-100 dark:text-black">
+                    AD
+                  </div>
+                  <div className="hidden text-left sm:block">
+                    <p className="text-xs font-bold text-brand-950 dark:text-zinc-100">
+                      ece@quizportal
+                    </p>
+                    <p className="text-[10px] text-brand-500 dark:text-zinc-400">
+                      Proctor Admin
+                    </p>
+                  </div>
+                  <ChevronDown className="h-3.5 w-3.5 text-slate-400 dark:text-zinc-500" />
+                </button>
+
+                <AnimatePresence>
+                  {showProfileMenu && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 8, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 8, scale: 0.95 }}
+                      className="absolute right-0 top-12 z-50 w-64 rounded-2xl border border-slate-200 bg-white p-4 shadow-xl dark:border-zinc-800 dark:bg-[#0c0d10]"
+                    >
+                      <div className="flex items-center gap-3 border-b border-slate-100 pb-3 dark:border-zinc-800/80">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-900 text-sm font-bold text-white dark:bg-white dark:text-slate-950">
+                          AD
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-slate-900 dark:text-white">ece@quizportal</p>
+                          <p className="text-[10px] text-slate-500 dark:text-zinc-400">Proctor Administrator</p>
+                          <p className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 mt-0.5">poweratex.aarga.org</p>
+                        </div>
+                      </div>
+
+                      <div className="my-3 space-y-1">
+                        <div className="flex items-center justify-between rounded-xl px-2.5 py-1.5 text-xs text-slate-600 dark:text-zinc-400">
+                          <span>RLS Security</span>
+                          <span className="font-bold text-emerald-600 dark:text-emerald-400">Active</span>
+                        </div>
+                      </div>
+
+                      <div className="border-t border-slate-100 pt-2 dark:border-zinc-800/80">
+                        <button
+                          onClick={() => {
+                            setShowProfileMenu(false);
+                            handleAdminLogout();
+                          }}
+                          className="flex w-full items-center gap-2 rounded-xl bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700 transition hover:bg-rose-100 dark:bg-rose-950/40 dark:text-rose-300 dark:hover:bg-rose-900/60 cursor-pointer"
+                        >
+                          <LogOut className="h-4 w-4" />
+                          <span>Sign Out Admin</span>
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
             </div>
           </header>
 
