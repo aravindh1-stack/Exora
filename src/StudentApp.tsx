@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { StudentWithSession, ExamRoom, Question } from '@/lib/types';
 import { StudentPortal } from '@/components/StudentPortal';
+import { LandingPage } from '@/components/LandingPage';
 import { fetchQuestions, fetchStudentsWithSessions, fetchExamRooms } from '@/lib/queries';
+import { safeStorage } from '@/lib/storage';
 import { PortalErrorBoundary } from '@/components/PortalErrorBoundary';
-
-
 
 export function StudentApp() {
   const [students, setStudents] = useState<StudentWithSession[]>([]);
@@ -12,6 +12,15 @@ export function StudentApp() {
   const [rooms, setRooms] = useState<ExamRoom[]>([]);
   const [apiError, setApiError] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+
+  // Skip the landing page automatically if a session is already mid-flight
+  // (e.g. URL has ?reg=&room= or SEB relaunch) so we never interrupt an active exam.
+  const [showLanding, setShowLanding] = useState<boolean>(() => {
+    const params = new URLSearchParams(window.location.search);
+    const hasActiveSession =
+      params.get('reg') || safeStorage.getItem('exora_session_reg');
+    return !hasActiveSession;
+  });
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -37,8 +46,12 @@ export function StudentApp() {
     loadData();
   }, [loadData]);
 
+  if (showLanding) {
+    return <LandingPage onEnterPortal={() => setShowLanding(false)} />;
+  }
+
   return (
-    <div className="relative min-h-screen bg-slate-50 text-slate-900 transition-colors duration-200 dark:bg-black dark:text-zinc-100">
+    <div className="relative min-h-screen bg-[#f7f8fa] text-brand-900 transition-colors duration-200 dark:bg-[#08090b] dark:text-zinc-100">
       <div className="pointer-events-none fixed inset-0 bg-grid-light bg-grid opacity-60 dark:bg-grid-dark dark:opacity-30" />
       <PortalErrorBoundary>
         <StudentPortal
@@ -54,5 +67,3 @@ export function StudentApp() {
     </div>
   );
 }
-
-

@@ -80,9 +80,10 @@ export function Rooms({
         className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
       >
         <div>
-          <h2 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-2xl">
+          <h2 className="font-display text-xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-2xl">
             Targeted Exam Rooms
           </h2>
+
           <p className="text-xs text-slate-500 dark:text-zinc-400">
             Create exam rooms restricted to specific Departments, Years, and Semesters.
           </p>

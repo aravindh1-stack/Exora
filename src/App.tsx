@@ -8,7 +8,9 @@ import { Questions } from '@/components/Questions';
 import { Students } from '@/components/Students';
 import { Rooms } from '@/components/Rooms';
 import { StudentPortal } from '@/components/StudentPortal';
+import { LandingPage } from '@/components/LandingPage';
 import { AdminLogin } from '@/components/AdminLogin';
+
 import { PortalErrorBoundary } from '@/components/PortalErrorBoundary';
 import { fetchQuestions, fetchStudentsWithSessions, fetchExamRooms } from '@/lib/queries';
 
@@ -100,9 +102,21 @@ function App() {
     setIsAdminAuthed(false);
   }
 
+
+  const [showLanding, setShowLanding] = useState<boolean>(() => {
+    const params = new URLSearchParams(window.location.search);
+    const hasActiveSession =
+      params.get('reg') || safeStorage.getItem('exora_session_reg');
+    return !hasActiveSession;
+  });
+
   if (isStudentPortal) {
+    if (showLanding) {
+      return <LandingPage onEnterPortal={() => setShowLanding(false)} />;
+    }
+
     return (
-      <div className="relative min-h-screen bg-slate-50 text-slate-900 transition-colors duration-200 dark:bg-black dark:text-zinc-100">
+      <div className="relative min-h-screen bg-[#f7f8fa] text-brand-900 transition-colors duration-200 dark:bg-[#08090b] dark:text-zinc-100">
         <div className="pointer-events-none fixed inset-0 bg-grid-light bg-grid opacity-60 dark:bg-grid-dark dark:opacity-30" />
         <PortalErrorBoundary>
           <StudentPortal
@@ -118,6 +132,7 @@ function App() {
       </div>
     );
   }
+
 
 
 

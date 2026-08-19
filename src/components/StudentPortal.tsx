@@ -15,11 +15,14 @@ import {
   Maximize2,
   Check,
   LogOut,
+  Zap,
 } from 'lucide-react';
 import type { StudentWithSession, ExamRoom, Question } from '@/lib/types';
 import { submitExamSession, logProctoringIncident, matchStudentToRoom, createStudent } from '@/lib/queries';
 import { safeStorage } from '@/lib/storage';
 import { Spinner } from './ui';
+import { StudentDashboard } from './StudentDashboard';
+
 
 function normalizeCode(str: string): string {
   return (str || '').toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -36,7 +39,8 @@ interface StudentPortalProps {
   loading?: boolean;
 }
 
-type Stage = 'verify' | 'seb_check' | 'terms' | 'exam' | 'submitted';
+type Stage = 'dashboard' | 'seb_check' | 'terms' | 'exam' | 'submitted';
+
 
 const DEFAULT_FALLBACK_QUESTIONS: Question[] = [
   {
@@ -104,7 +108,7 @@ export function StudentPortal({
   onRetryFetch,
   loading = false,
 }: StudentPortalProps) {
-  const [stage, setStage] = useState<Stage>('verify');
+  const [stage, setStage] = useState<Stage>('dashboard');
   const [registerNo, setRegisterNo] = useState('');
   const [roomCode, setRoomCode] = useState('');
   const [verifyError, setVerifyError] = useState<string | null>(null);
@@ -134,12 +138,24 @@ export function StudentPortal({
     return roomQuestions[currentIdx] || roomQuestions[0] || null;
   }, [roomQuestions, currentIdx]);
 
-  // Strict SEB Detection State
-  const isSEBVerified = useMemo(() => {
-    const ua = navigator.userAgent;
-    return ua.includes('SEB') || ua.includes('SafeExamBrowser');
-  }, []);
-
+  // Active Student Candidate (Defaults to first student profile or candidate fallback)
+  const currentCandidate = useMemo<StudentWithSession>(() => {
+    if (activeStudent) return activeStudent;
+    if (students && students.length > 0) return students[0];
+    return {
+      id: 'student-default',
+      register_no: 'E24EC025',
+      name: 'Candidate Student',
+      email: 'student@sscet.edu',
+      department: 'Electronics & Communication',
+      year: 3,
+      semester: 5,
+      status: 'in_progress',
+      score: 0,
+      session_id: null,
+      created_at: new Date().toISOString(),
+    };
+  }, [activeStudent, students]);
 
   // Helper for strict room-based question filtering
   const getRoomQuestionsStrict = useCallback((allQuestions: Question[], room: ExamRoom) => {
@@ -175,6 +191,55 @@ export function StudentPortal({
 
     return { list: filtered, isFallback: false };
   }, []);
+
+  // Direct Quiz Launch Handler from Student Dashboard
+  const handleLaunchQuiz = useCallback(
+    (room: ExamRoom) => {
+      const student = currentCandidate;
+      setActiveStudent(student);
+      setActiveRoom(room);
+
+      const { list: qList, isFallback } = getRoomQuestionsStrict(questions, room);
+      setRoomQuestions(qList);
+      setUsingFallbackQuestions(isFallback);
+
+      const storageKey = `exora_start_${student.id}_${room.id}`;
+      const existingStart = safeStorage.getItem(storageKey);
+      let startTimestamp = Date.now();
+
+      if (existingStart) {
+        startTimestamp = Number(existingStart);
+      } else {
+        safeStorage.setItem(storageKey, String(startTimestamp));
+      }
+
+      const elapsedSeconds = Math.floor((Date.now() - startTimestamp) / 1000);
+      const totalSeconds = room.duration_minutes * 60;
+      let remainingSeconds = totalSeconds - elapsedSeconds;
+
+      if (remainingSeconds <= 0) {
+        startTimestamp = Date.now();
+        safeStorage.setItem(storageKey, String(startTimestamp));
+        remainingSeconds = totalSeconds;
+      }
+      setTimeLeft(remainingSeconds);
+
+      safeStorage.setItem('exora_session_reg', student.register_no);
+      safeStorage.setItem('exora_session_room', room.room_code);
+      safeStorage.setItem('exora_session_stage', 'terms');
+
+      const url = new URL(window.location.href);
+      url.searchParams.set('mode', 'student');
+      url.searchParams.set('reg', student.register_no);
+      url.searchParams.set('room', room.room_code);
+      url.searchParams.set('stage', 'terms');
+      window.history.replaceState({}, '', url.toString());
+
+      setStage('terms');
+    },
+    [currentCandidate, questions, getRoomQuestionsStrict],
+  );
+
 
   // Restore State from URL query parameters or safeStorage (Handles SEB page reloads cleanly)
   useEffect(() => {
@@ -406,6 +471,12 @@ export function StudentPortal({
     setStage(targetStage);
   }
 
+  // Strict SEB Detection State
+  const isSEBVerified = useMemo(() => {
+    const ua = navigator.userAgent;
+    return ua.includes('SEB') || ua.includes('SafeExamBrowser');
+  }, []);
+
   // Auto-transition to Terms when inside SEB
   useEffect(() => {
     if (stage === 'seb_check' && isSEBVerified) {
@@ -413,6 +484,7 @@ export function StudentPortal({
       setStage('terms');
     }
   }, [stage, isSEBVerified]);
+
 
 
   // Global Copy/Paste & ContextMenu Lockdown Hook (Active across all portal stages)
@@ -607,219 +679,20 @@ export function StudentPortal({
   }, [roomQuestions, selectedAnswers, handleFinalSubmit]);
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8 sm:py-12">
+    <div className={stage === 'dashboard' ? 'w-full min-h-screen' : 'mx-auto max-w-5xl px-4 py-8 sm:py-12'}>
+
 
       <AnimatePresence mode="wait">
-        {/* Stage 1: World-Class Student Examination Landing & Verification Portal */}
-        {stage === 'verify' && (
-          <motion.div
-            key="verify"
-            initial={{ opacity: 0, y: 14, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -14, scale: 0.98 }}
-            transition={{ duration: 0.25 }}
-            className="space-y-8"
-          >
-            {/* Header Navigation */}
-            <div className="flex flex-col items-start justify-between gap-4 border-b border-slate-200/80 pb-6 sm:flex-row sm:items-center dark:border-zinc-800/80">
-              <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-900 text-white shadow-md dark:bg-zinc-100 dark:text-black">
-                  <GraduationCap className="h-6 w-6" />
-                </div>
-                <div>
-                  <h1 className="text-xl font-black tracking-tight text-slate-900 dark:text-white sm:text-2xl">
-                    EXORA STUDENT PORTAL
-                  </h1>
-                  <p className="text-xs font-semibold text-slate-500 dark:text-zinc-400">
-                    SSCET Enterprise Examination System
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3.5 py-1.5 text-xs font-bold text-emerald-700 shadow-sm dark:border-emerald-900/60 dark:bg-emerald-950/60 dark:text-emerald-300">
-                <span className="flex h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse" />
-                Proctoring & SEB Lockdown Engine Active
-              </div>
-            </div>
-
-            {/* SEB / Database API Diagnostic Banner */}
-
-            {apiError && (
-              <div className="rounded-2xl border border-rose-200 bg-rose-50/90 p-4 text-xs dark:border-rose-900/60 dark:bg-rose-950/50">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-start gap-2.5">
-                    <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-rose-600 dark:text-rose-400" />
-                    <div>
-                      <h4 className="font-bold text-rose-900 dark:text-rose-200">
-                        SEB Backend Database Connection Warning
-                      </h4>
-                      <p className="mt-0.5 text-rose-700 dark:text-rose-300">{apiError}</p>
-                      <p className="mt-1 text-[11px] text-rose-600 dark:text-rose-400">
-                        If Safe Exam Browser is blocking live API requests, standard exam questions will be loaded automatically via local diagnostic fallbacks.
-                      </p>
-                    </div>
-                  </div>
-                  {onRetryFetch && (
-                    <button
-                      onClick={onRetryFetch}
-                      disabled={loading}
-                      className="shrink-0 rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-bold text-white shadow hover:bg-rose-700 disabled:opacity-50"
-                    >
-                      {loading ? 'Retrying...' : 'Retry Connection'}
-                    </button>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Hero Grid: Login Card + Platform Features Bento Box */}
-            <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
-
-              {/* Left Column: Student Login Panel */}
-              <div className="panel-card relative overflow-hidden rounded-3xl p-6 sm:p-8 lg:col-span-6">
-                <div className="border-b border-slate-100 pb-5 dark:border-zinc-800">
-                  <span className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-slate-100 px-2.5 py-0.5 text-[11px] font-bold text-slate-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300">
-                    <BookOpen className="h-3.5 w-3.5 text-indigo-500" /> Student Candidate Verification
-                  </span>
-                  <h2 className="mt-3 text-xl font-extrabold text-slate-900 dark:text-white sm:text-2xl">
-                    Examination Entry
-                  </h2>
-                  <p className="mt-1 text-xs text-slate-500 dark:text-zinc-400">
-                    Enter your assigned SIN Number (Register No) and Exam Room Code to begin.
-                  </p>
-                </div>
-
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    handleVerifyCandidate();
-                  }}
-                  className="mt-6 space-y-4"
-                >
-                  {/* SIN / Register No Input */}
-                  <div>
-                    <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-zinc-400">
-                      SIN No / Register Number *
-                    </label>
-                    <input
-                      value={registerNo}
-                      onChange={(e) => setRegisterNo(e.target.value)}
-                      placeholder="e.g. REG2026001"
-                      className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 font-mono text-sm text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-slate-400 dark:border-zinc-800 dark:bg-pitch-900 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-zinc-700"
-                    />
-                  </div>
-
-                  {/* Exam Room Access Code Input */}
-                  <div>
-                    <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-zinc-400">
-                      Exam Room Access Code *
-                    </label>
-                    <div className="relative mt-1.5">
-                      <Key className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 dark:text-zinc-500" />
-                      <input
-                        value={roomCode}
-                        onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
-                        placeholder="e.g. CS-Y3S5-891"
-                        className="w-full rounded-xl border border-slate-200 bg-white py-3 pl-10 pr-3.5 font-mono text-sm uppercase text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-slate-400 dark:border-zinc-800 dark:bg-pitch-900 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-zinc-700"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Error Banner */}
-                  {verifyError && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -4 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="flex items-start gap-2.5 rounded-xl border border-rose-200 bg-rose-50 p-3.5 text-xs font-medium text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-300"
-                    >
-                      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                      <span>{verifyError}</span>
-                    </motion.div>
-                  )}
-
-                  {/* Anti-Cheat Compliance Badge */}
-                  <div className="rounded-xl border border-slate-100 bg-slate-50/80 p-3 text-[11px] text-slate-500 dark:border-zinc-800/80 dark:bg-zinc-950/50 dark:text-zinc-400">
-                    <div className="flex items-center gap-1.5 font-semibold text-slate-800 dark:text-zinc-200">
-                      <ShieldCheck className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-                      <span>Safe Exam Browser & Anti-Cheat Enforced</span>
-                    </div>
-                    <p className="mt-0.5 text-[10px] text-slate-400 dark:text-zinc-500">
-                      Fullscreen monitoring, persistent timer tracking, and tab telemetry active.
-                    </p>
-                  </div>
-
-                  {/* Verify Button */}
-                  <button
-                    type="submit"
-                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 py-3.5 text-xs font-bold text-white shadow-subtle transition hover:bg-slate-800 active:scale-[0.99] dark:bg-zinc-100 dark:text-black dark:hover:bg-zinc-200"
-                  >
-                    <span>Verify Credentials & Launch Examination</span>
-                    <ArrowRight className="h-4 w-4" />
-                  </button>
-                </form>
-              </div>
-
-              {/* Right Column: Platform Overview & Bento Grid */}
-              <div className="space-y-4 lg:col-span-6">
-                <div className="rounded-3xl border border-slate-200 bg-white/70 p-6 shadow-sm dark:border-zinc-800/80 dark:bg-pitch-900/60">
-                  <h3 className="text-base font-extrabold text-slate-900 dark:text-white">
-                    Exora Student Examination Portal
-                  </h3>
-                  <p className="mt-1 text-xs text-slate-500 dark:text-zinc-400">
-                    A secure, proctored digital assessment system designed specifically for students of SSCET.
-                  </p>
-
-                  <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 dark:border-zinc-800/80 dark:bg-zinc-950/50">
-                      <ShieldCheck className="h-5 w-5 text-indigo-500" />
-                      <h4 className="mt-2 text-xs font-bold text-slate-900 dark:text-white">
-                        Safe Exam Browser
-                      </h4>
-                      <p className="mt-1 text-[11px] text-slate-500 dark:text-zinc-400">
-                        Locks down external tools & unapproved web applications during tests.
-                      </p>
-                    </div>
-
-                    <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 dark:border-zinc-800/80 dark:bg-zinc-950/50">
-                      <Clock className="h-5 w-5 text-amber-500" />
-                      <h4 className="mt-2 text-xs font-bold text-slate-900 dark:text-white">
-                        Persistent Timer
-                      </h4>
-                      <p className="mt-1 text-[11px] text-slate-500 dark:text-zinc-400">
-                        Seamlessly resumes your exact balance timing if interrupted.
-                      </p>
-                    </div>
-
-                    <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 dark:border-zinc-800/80 dark:bg-zinc-950/50">
-                      <AlertTriangle className="h-5 w-5 text-rose-500" />
-                      <h4 className="mt-2 text-xs font-bold text-slate-900 dark:text-white">
-                        Automated Telemetry
-                      </h4>
-                      <p className="mt-1 text-[11px] text-slate-500 dark:text-zinc-400">
-                        Real-time tab switch tracking & automated malpractice flags.
-                      </p>
-                    </div>
-
-                    <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 dark:border-zinc-800/80 dark:bg-zinc-950/50">
-                      <Award className="h-5 w-5 text-emerald-500" />
-                      <h4 className="mt-2 text-xs font-bold text-slate-900 dark:text-white">
-                        Instant Evaluation
-                      </h4>
-                      <p className="mt-1 text-[11px] text-slate-500 dark:text-zinc-400">
-                        Instant auto-grading & score breakdown upon final submission.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between rounded-2xl border border-slate-200/80 bg-slate-100/60 px-5 py-3.5 text-xs text-slate-500 dark:border-zinc-800/80 dark:bg-zinc-900/60 dark:text-zinc-400">
-                  <span className="font-semibold text-slate-700 dark:text-zinc-300">Need Help?</span>
-                  <span>Contact your Department Examination Coordinator</span>
-                </div>
-              </div>
-            </div>
-          </motion.div>
+        {/* Stage 1: Student Workspace Dashboard View */}
+        {stage === 'dashboard' && (
+          <StudentDashboard
+            student={currentCandidate}
+            rooms={rooms}
+            onStartExam={handleLaunchQuiz}
+            loading={loading}
+          />
         )}
+
 
         {/* Stage 2: Safe Exam Browser (SEB) Launcher Screen */}
         {stage === 'seb_check' && activeStudent && activeRoom && (
@@ -906,19 +779,76 @@ export function StudentPortal({
           </motion.div>
         )}
 
-        {/* Stage 2.5: Terms & Conditions & Proctoring Rules Agreement */}
+        {/* Stage 2.5: Student Dashboard & Examination Terms Agreement */}
         {stage === 'terms' && activeStudent && activeRoom && (
           <motion.div
             key="terms"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            className="panel-card mx-auto max-w-xl rounded-2xl p-6 sm:p-8"
+            className="panel-card mx-auto max-w-2xl rounded-2xl p-6 sm:p-8"
           >
+            {/* Department-Wise Live Quiz Priority Alert Banner */}
+            <div className="mb-6 overflow-hidden rounded-2xl border border-amber-300/80 bg-gradient-to-r from-amber-500/10 via-amber-400/5 to-transparent p-4 text-xs dark:border-amber-700/60 dark:bg-amber-950/40">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-500 text-white shadow-sm">
+                    <Zap className="h-5 w-5 animate-pulse" />
+                  </div>
+                  <div>
+                    <span className="inline-flex items-center gap-1 text-[10px] font-extrabold uppercase tracking-wider text-amber-700 dark:text-amber-300">
+                      ⚡ Priority Notice — Active Department Quiz
+                    </span>
+                    <h4 className="text-sm font-bold text-slate-900 dark:text-white">
+                      {activeRoom.title} ({activeRoom.room_code})
+                    </h4>
+                    <p className="mt-0.5 text-xs text-slate-600 dark:text-zinc-300">
+                      Active for <strong>{activeRoom.department}</strong> (Year {activeRoom.year} • Sem {activeRoom.semester}). Complete early to avoid grade penalties!
+                    </p>
+                  </div>
+                </div>
+
+                <div className="shrink-0">
+                  <span className="inline-flex items-center gap-1 rounded-xl bg-amber-100 px-3 py-1.5 font-mono text-xs font-bold text-amber-900 dark:bg-amber-900/60 dark:text-amber-200">
+                    <Clock className="h-3.5 w-3.5" /> {activeRoom.duration_minutes} Mins
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Student Dashboard Profile & Performance Cards */}
+            <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div className="rounded-2xl border border-slate-200/80 bg-slate-50 p-4 dark:border-zinc-800/80 dark:bg-zinc-950/60">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-zinc-500">
+                  Verified Candidate
+                </span>
+                <p className="mt-1 text-sm font-bold text-slate-900 dark:text-white">{activeStudent.name}</p>
+                <p className="font-mono text-xs text-slate-500 dark:text-zinc-400">SIN: {activeStudent.register_no}</p>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200/80 bg-slate-50 p-4 dark:border-zinc-800/80 dark:bg-zinc-950/60">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-zinc-500">
+                  Department Roster
+                </span>
+                <p className="mt-1 text-sm font-bold text-slate-900 dark:text-white">{activeStudent.department || activeRoom.department}</p>
+                <p className="text-xs text-slate-500 dark:text-zinc-400">Year {activeStudent.year || activeRoom.year} • Sem {activeStudent.semester || activeRoom.semester}</p>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200/80 bg-slate-50 p-4 dark:border-zinc-800/80 dark:bg-zinc-950/60">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-zinc-500">
+                  Score Record
+                </span>
+                <p className="mt-1 text-sm font-bold text-emerald-600 dark:text-emerald-400">
+                  {activeStudent.score > 0 ? `${activeStudent.score}% Achieved` : 'Ready to Attempt'}
+                </p>
+                <p className="text-xs text-slate-500 dark:text-zinc-400">Status: {activeStudent.status === 'completed' ? 'Completed' : 'Enrolled'}</p>
+              </div>
+            </div>
+
             <div className="flex items-center justify-between border-b border-slate-100 pb-4 dark:border-zinc-800">
               <div>
                 <span className="inline-flex items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-300">
-                  <CheckCircle2 className="h-3.5 w-3.5" /> SEB Environment Verified
+                  <CheckCircle2 className="h-3.5 w-3.5" /> Safe Exam Browser Verified
                 </span>
                 <h3 className="mt-2 text-lg font-bold text-slate-900 dark:text-white">
                   {activeRoom.title}
@@ -929,24 +859,11 @@ export function StudentPortal({
               </span>
             </div>
 
-            <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
-              <div className="rounded-xl border border-slate-100 bg-slate-50 p-3 dark:border-zinc-800/80 dark:bg-zinc-950/60">
-                <span className="text-slate-500 dark:text-zinc-400">Student Candidate</span>
-                <p className="mt-0.5 font-bold text-slate-900 dark:text-white">{activeStudent.name}</p>
-                <p className="font-mono text-[11px] text-slate-500 dark:text-zinc-400">SIN: {activeStudent.register_no}</p>
-              </div>
-
-              <div className="rounded-xl border border-slate-100 bg-slate-50 p-3 dark:border-zinc-800/80 dark:bg-zinc-950/60">
-                <span className="text-slate-500 dark:text-zinc-400">Allocated Duration</span>
-                <p className="mt-0.5 font-bold text-slate-900 dark:text-white">{activeRoom.duration_minutes} Minutes</p>
-                <p className="text-[11px] text-slate-500 dark:text-zinc-400">{activeRoom.department} • Y{activeRoom.year} S{activeRoom.semester}</p>
-              </div>
-            </div>
-
             {/* Terms & Rules Cards */}
             <div className="mt-5 space-y-3">
               <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-4 text-xs dark:border-amber-900/60 dark:bg-amber-950/30">
                 <h4 className="flex items-center gap-1.5 font-bold text-amber-900 dark:text-amber-200">
+
                   <AlertTriangle className="h-4 w-4 text-amber-600" /> Malpractice & Mark Deduction Policy
                 </h4>
                 <p className="mt-1 text-[11px] text-amber-950 dark:text-amber-300/80">
@@ -997,13 +914,14 @@ export function StudentPortal({
             <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-t border-slate-100 pt-4 dark:border-zinc-800">
               <button
                 onClick={() => {
-                  safeStorage.setItem('exora_session_stage', 'verify');
-                  setStage('verify');
+                  safeStorage.setItem('exora_session_stage', 'dashboard');
+                  setStage('dashboard');
                 }}
                 className="flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-white"
               >
-                <ArrowLeft className="h-4 w-4" /> Back
+                <ArrowLeft className="h-4 w-4" /> Back to Dashboard
               </button>
+
 
               <button
                 disabled={!(chkIdentity && chkMalpractice && chkTime)}
@@ -1101,10 +1019,11 @@ export function StudentPortal({
                 )}
 
                 {/* Timer Badge */}
-                <div className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-100 px-3.5 py-1.5 font-mono text-sm font-bold text-slate-900 dark:border-zinc-800 dark:bg-zinc-900 dark:text-white">
-                  <Clock className="h-4 w-4 text-amber-500" />
+                <div className="flex items-center gap-1.5 rounded-lg border border-brand-200 bg-brand-50 px-3.5 py-1.5 font-mono text-sm font-bold text-brand-900 dark:border-zinc-800 dark:bg-zinc-900 dark:text-white">
+                  <Clock className="h-4 w-4 text-brand-400 dark:text-zinc-500" />
                   <span>{formattedTime}</span>
                 </div>
+
 
                 {/* Finish Exam Button */}
                 <button
@@ -1266,97 +1185,78 @@ export function StudentPortal({
               </div>
 
 
-              {/* Redesigned Exam Sidebar Panel */}
-              <div className="panel-card flex flex-col justify-between rounded-2xl p-5 space-y-6">
-                <div>
-                  {/* 1. Live Countdown Timer Card */}
-                  <div className="rounded-2xl border border-amber-200/80 bg-amber-50/70 p-4 text-center dark:border-amber-900/50 dark:bg-amber-950/30">
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-amber-800 dark:text-amber-300 flex items-center justify-center gap-1.5">
-                      <Clock className="h-3.5 w-3.5 text-amber-500 animate-pulse" /> Time Remaining
+              {/* Question Palette Sidebar */}
+              <div className="panel-card flex flex-col rounded-2xl p-5">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-display text-xs font-bold uppercase tracking-wider text-brand-500 dark:text-zinc-400">
+                    Question Palette
+                  </h4>
+                  <span className="rounded-md bg-brand-50 px-2 py-0.5 text-[10px] font-semibold text-brand-500 dark:bg-zinc-900 dark:text-zinc-400">
+                    {Object.keys(selectedAnswers).length}/{roomQuestions.length}
+                  </span>
+                </div>
+
+                <div className="mt-4 grid grid-cols-5 gap-2">
+                  {roomQuestions.map((q, idx) => {
+                    const isAnswered = selectedAnswers[q.id] !== undefined;
+                    const isCurrent = idx === currentIdx;
+                    return (
+                      <button
+                        key={q.id}
+                        onClick={() => setCurrentIdx(idx)}
+                        className={`flex h-9 w-9 items-center justify-center rounded-lg font-mono text-xs font-bold transition-all ${
+                          isCurrent
+                            ? 'border-2 border-brand-900 bg-brand-900 text-white shadow-subtle dark:border-white dark:bg-white dark:text-brand-950'
+                            : isAnswered
+                              ? 'bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-900/50'
+                              : 'bg-brand-50 text-brand-400 ring-1 ring-inset ring-brand-200/60 dark:bg-zinc-900 dark:text-zinc-500 dark:ring-zinc-800'
+                        }`}
+                      >
+                        {idx + 1}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="mt-6 space-y-2 border-t border-brand-100 pt-4 text-[11px] text-brand-500 dark:border-zinc-800 dark:text-zinc-400">
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-2">
+                      <span className="h-2.5 w-2.5 rounded-full bg-emerald-100 ring-1 ring-emerald-300 dark:bg-emerald-950/60 dark:ring-emerald-800" />
+                      Answered
                     </span>
-                    <p className="mt-1 font-mono text-2xl font-black tracking-tight text-slate-900 dark:text-white">
-                      {formattedTime}
-                    </p>
+                    <span className="font-semibold text-brand-800 dark:text-zinc-200">
+                      {Object.keys(selectedAnswers).length}
+                    </span>
                   </div>
-
-                  {/* 2. Question Palette */}
-                  <div className="mt-5">
-                    <div className="flex items-center justify-between">
-                      <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-600 dark:text-zinc-400">
-                        Question Palette
-                      </h4>
-                      <span className="text-[11px] font-semibold text-slate-400 dark:text-zinc-500">
-                        {Object.keys(selectedAnswers).length} / {roomQuestions.length}
-                      </span>
-                    </div>
-
-                    <div className="mt-3 grid grid-cols-5 gap-2">
-                      {roomQuestions.map((q, idx) => {
-                        const isAnswered = selectedAnswers[q.id] !== undefined;
-                        const isCurrent = idx === currentIdx;
-                        return (
-                          <button
-                            key={q.id}
-                            onClick={() => setCurrentIdx(idx)}
-                            className={`flex h-9 w-9 items-center justify-center rounded-xl font-mono text-xs font-bold transition shadow-sm ${
-                              isCurrent
-                                ? 'ring-2 ring-indigo-500 ring-offset-2 bg-slate-900 text-white dark:bg-zinc-100 dark:text-black dark:ring-offset-black'
-                                : isAnswered
-                                  ? 'bg-emerald-500 text-white shadow-emerald-500/20'
-                                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800'
-                            }`}
-                          >
-                            {idx + 1}
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    {/* Status Legend */}
-                    <div className="mt-5 space-y-2 border-t border-slate-100 pt-3 text-[11px] font-semibold text-slate-500 dark:border-zinc-800 dark:text-zinc-400">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="h-3 w-3 rounded-full bg-emerald-500" />
-                          <span>Answered</span>
-                        </div>
-                        <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                          {Object.keys(selectedAnswers).length}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="h-3 w-3 rounded-full bg-slate-200 dark:bg-zinc-800" />
-                          <span>Unanswered / Skipped</span>
-                        </div>
-                        <span className="font-mono font-bold text-slate-500 dark:text-zinc-400">
-                          {Math.max(0, roomQuestions.length - Object.keys(selectedAnswers).length)}
-                        </span>
-                      </div>
-                    </div>
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-2">
+                      <span className="h-2.5 w-2.5 rounded-full bg-brand-50 ring-1 ring-brand-200 dark:bg-zinc-900 dark:ring-zinc-700" />
+                      Unanswered
+                    </span>
+                    <span className="font-semibold text-brand-800 dark:text-zinc-200">
+                      {roomQuestions.length - Object.keys(selectedAnswers).length}
+                    </span>
                   </div>
                 </div>
 
-                {/* 3. Prominent Finish Exam Button in Sidebar */}
-                <div className="border-t border-slate-100 pt-4 dark:border-zinc-800">
-                  <button
-                    onClick={confirmAndFinishExam}
-                    disabled={submitting}
-                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 py-3.5 text-xs font-extrabold text-white shadow-md transition hover:bg-emerald-700 active:scale-[0.98] disabled:opacity-50"
-                  >
-                    {submitting ? (
-                      <>
-                        <Spinner size={14} /> Processing Submission...
-                      </>
-                    ) : (
-                      <>
-                        <CheckCircle2 className="h-4 w-4" />
-                        <span>Finish & Submit Exam</span>
-                      </>
-                    )}
-                  </button>
-                </div>
+                {/* Finish Exam */}
+                <button
+                  onClick={confirmAndFinishExam}
+                  disabled={submitting}
+                  className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-brand-900 py-3 text-xs font-bold text-white shadow-subtle transition hover:bg-brand-800 disabled:opacity-50 dark:bg-white dark:text-brand-950 dark:hover:bg-zinc-200"
+                >
+                  {submitting ? (
+                    <>
+                      <Spinner size={14} /> Submitting...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="h-4 w-4" /> Finish Exam
+                    </>
+                  )}
+                </button>
               </div>
+
 
             </div>
             </>
@@ -1395,16 +1295,18 @@ export function StudentPortal({
 
             <button
               onClick={() => {
-                setStage('verify');
-                setRegisterNo('');
-                setRoomCode('');
+                safeStorage.removeItem('exora_session_reg');
+                safeStorage.removeItem('exora_session_room');
+                safeStorage.removeItem('exora_session_stage');
                 setActiveStudent(null);
                 setActiveRoom(null);
+                setStage('dashboard');
               }}
-              className="mt-6 w-full rounded-xl bg-slate-900 py-3 text-xs font-bold text-white shadow-subtle transition hover:bg-slate-800 dark:bg-zinc-100 dark:text-black dark:hover:bg-zinc-200"
+              className="mt-6 w-full rounded-xl bg-brand-900 py-3 text-xs font-bold text-white shadow-subtle transition hover:bg-brand-800 dark:bg-white dark:text-brand-950 dark:hover:bg-zinc-200"
             >
-              Return to Student Login
+              Return to Student Dashboard
             </button>
+
           </motion.div>
         )}
       </AnimatePresence>

@@ -113,9 +113,10 @@ export function Dashboard({ students, questions, loading }: DashboardProps) {
         className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between"
       >
         <div>
-          <h2 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-2xl">
+          <h2 className="font-display text-xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-2xl">
             Proctoring Console
           </h2>
+
           <p className="text-xs text-slate-500 dark:text-zinc-400">
             Real-time examination metrics, malpractice alerts & question analytics.
           </p>

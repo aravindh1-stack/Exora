@@ -123,9 +123,10 @@ export function Students({ students, loading, onReload }: StudentsProps) {
         className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
       >
         <div>
-          <h2 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-2xl">
+          <h2 className="font-display text-xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-2xl">
             Student Roster & Performance
           </h2>
+
           <p className="text-xs text-slate-500 dark:text-zinc-400">
             Manage academic profiles, current year/sem status, and live exam proctoring.
           </p>

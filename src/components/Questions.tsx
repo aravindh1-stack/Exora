@@ -119,9 +119,10 @@ export function Questions({ questions, loading, onReload }: QuestionsProps) {
         className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
       >
         <div>
-          <h2 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">
+          <h2 className="font-display text-xl font-bold tracking-tight text-slate-900 dark:text-white">
             Question Bank
           </h2>
+
           <p className="text-xs text-slate-500 dark:text-zinc-400">
             Create, search, and manage multiple-choice examination questions.
           </p>
