@@ -114,59 +114,67 @@ function App() {
     setViewMode('admin_login');
   }
 
-  // 1. Landing View
-  if (viewMode === 'landing') {
-    return (
-      <LandingPage
-        onEnterPortal={() => setViewMode('student_auth')}
-        onEnterAdmin={() => setViewMode('admin_login')}
-      />
-    );
-  }
+  // A. STRICT ADMIN DOMAIN ROUTING OVERRIDE (poweratex.aarga.org / admin routes)
+  if (isAdminDomain) {
+    if (!isAdminAuthed || viewMode === 'admin_login') {
+      return (
+        <AdminLogin
+          onSuccess={() => {
+            safeStorage.setItem('exora_admin_authed', 'true');
+            setIsAdminAuthed(true);
+            setViewMode('admin_console');
+          }}
+          onBackToLanding={() => {
+            window.location.href = 'https://exora.aarga.org';
+          }}
+        />
+      );
+    }
+  } else {
+    // B. STUDENT PORTAL & PUBLIC LANDING ROUTING (exora.aarga.org)
+    // 1. Public Landing View
+    if (viewMode === 'landing') {
+      return (
+        <LandingPage
+          onEnterPortal={() => setViewMode('student_auth')}
+          onEnterAdmin={() => {
+            window.location.href = 'https://poweratex.aarga.org';
+          }}
+        />
+      );
+    }
 
-  // 2. Student Authentication View
-  if (viewMode === 'student_auth') {
-    return (
-      <StudentAuth
-        existingStudents={students}
-        onAuthSuccess={() => setViewMode('student_portal')}
-        onBackToLanding={() => setViewMode('landing')}
-      />
-    );
-  }
+    // 2. Student Authentication View
+    if (viewMode === 'student_auth') {
+      return (
+        <StudentAuth
+          existingStudents={students}
+          onAuthSuccess={() => setViewMode('student_portal')}
+          onBackToLanding={() => setViewMode('landing')}
+        />
+      );
+    }
 
-  // 3. Student Portal / Dashboard / Exam Workspace
-  if (viewMode === 'student_portal') {
-    return (
-      <div className="relative min-h-screen bg-[#f7f8fa] text-brand-900 transition-colors duration-200 dark:bg-[#08090b] dark:text-zinc-100">
-        <div className="pointer-events-none fixed inset-0 bg-grid-light bg-grid opacity-60 dark:bg-grid-dark dark:opacity-30" />
-        <PortalErrorBoundary>
-          <StudentPortal
-            students={students}
-            rooms={rooms}
-            questions={questions}
-            onExamSubmitted={loadAllData}
-            apiError={appApiError}
-            onRetryFetch={loadAllData}
-            loading={loadingStudents || loadingQuestions || loadingRooms}
-            onLogoutStudent={() => setViewMode('student_auth')}
-          />
-        </PortalErrorBoundary>
-      </div>
-    );
-  }
-
-  // 4. Admin Login View
-  if (viewMode === 'admin_login' || !isAdminAuthed) {
-    return (
-      <AdminLogin
-        onSuccess={() => {
-          setIsAdminAuthed(true);
-          setViewMode('admin_console');
-        }}
-        onBackToLanding={() => setViewMode('landing')}
-      />
-    );
+    // 3. Student Portal / Dashboard / Exam Workspace
+    if (viewMode === 'student_portal') {
+      return (
+        <div className="relative min-h-screen bg-[#f7f8fa] text-brand-900 transition-colors duration-200 dark:bg-[#08090b] dark:text-zinc-100">
+          <div className="pointer-events-none fixed inset-0 bg-grid-light bg-grid opacity-60 dark:bg-grid-dark dark:opacity-30" />
+          <PortalErrorBoundary>
+            <StudentPortal
+              students={students}
+              rooms={rooms}
+              questions={questions}
+              onExamSubmitted={loadAllData}
+              apiError={appApiError}
+              onRetryFetch={loadAllData}
+              loading={loadingStudents || loadingQuestions || loadingRooms}
+              onLogoutStudent={() => setViewMode('student_auth')}
+            />
+          </PortalErrorBoundary>
+        </div>
+      );
+    }
   }
 
   // 5. Authenticated Admin Proctor Console
