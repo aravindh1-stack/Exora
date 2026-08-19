@@ -5,8 +5,8 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
-        display: ['"Space Grotesk"', 'Inter', 'ui-sans-serif', 'sans-serif'],
+        sans: ['Urbanist', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        display: ['Urbanist', 'ui-sans-serif', 'system-ui', 'sans-serif'],
       },
       colors: {
         pitch: {

@@ -37,6 +37,7 @@ interface StudentPortalProps {
   apiError?: string | null;
   onRetryFetch?: () => void;
   loading?: boolean;
+  onLogoutStudent?: () => void;
 }
 
 type Stage = 'dashboard' | 'seb_check' | 'terms' | 'exam' | 'submitted';
@@ -107,6 +108,7 @@ export function StudentPortal({
   apiError,
   onRetryFetch,
   loading = false,
+  onLogoutStudent,
 }: StudentPortalProps) {
   const [stage, setStage] = useState<Stage>('dashboard');
   const [registerNo, setRegisterNo] = useState('');
@@ -138,10 +140,26 @@ export function StudentPortal({
     return roomQuestions[currentIdx] || roomQuestions[0] || null;
   }, [roomQuestions, currentIdx]);
 
-  // Active Student Candidate (Defaults to first student profile or candidate fallback)
+  // Active Student Candidate (Restored dynamically from activeStudent, safeStorage profile, or matching students DB list)
   const currentCandidate = useMemo<StudentWithSession>(() => {
     if (activeStudent) return activeStudent;
+
+    const savedProfile = safeStorage.getJson<StudentWithSession>('exora_student_profile');
+    if (savedProfile && savedProfile.register_no) return savedProfile;
+
+    const savedReg =
+      safeStorage.getItem('exora_session_reg') ||
+      new URLSearchParams(window.location.search).get('reg');
+
+    if (savedReg && students && students.length > 0) {
+      const match = students.find(
+        (s) => s.register_no.toLowerCase() === savedReg.toLowerCase(),
+      );
+      if (match) return match;
+    }
+
     if (students && students.length > 0) return students[0];
+
     return {
       id: 'student-default',
       register_no: 'E24EC025',
@@ -156,6 +174,25 @@ export function StudentPortal({
       created_at: new Date().toISOString(),
     };
   }, [activeStudent, students]);
+
+  useEffect(() => {
+    const savedProfile = safeStorage.getJson<StudentWithSession>('exora_student_profile');
+    const savedReg =
+      savedProfile?.register_no ||
+      safeStorage.getItem('exora_session_reg') ||
+      new URLSearchParams(window.location.search).get('reg');
+
+    if (savedReg && students && students.length > 0) {
+      const match = students.find(
+        (s) => s.register_no.toLowerCase() === savedReg.toLowerCase(),
+      );
+      if (match) {
+        setActiveStudent(match);
+      } else if (savedProfile) {
+        setActiveStudent(savedProfile);
+      }
+    }
+  }, [students]);
 
   // Helper for strict room-based question filtering
   const getRoomQuestionsStrict = useCallback((allQuestions: Question[], room: ExamRoom) => {
@@ -530,54 +567,6 @@ export function StudentPortal({
     };
   }, []);
 
-  // Tab-Switch Proctoring Telemetry Hook
-  useEffect(() => {
-    if (stage !== 'exam') return;
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'hidden') {
-        setWarningsCount((prev) => {
-          const next = prev + 1;
-          const msg = `Warning ${next}/3: Tab switch or window minimization detected!`;
-          setWarningToast(msg);
-
-          if (activeStudent && activeRoom) {
-            logProctoringIncident({
-              event_type: 'tab_switch',
-              details: `Student ${activeStudent.name} (${activeStudent.register_no}) switched tab. Warning #${next}`,
-            });
-          }
-
-          setTimeout(() => setWarningToast(null), 4000);
-          return next;
-        });
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [stage, activeStudent, activeRoom]);
-
-  // 4. Live Exam Countdown Timer Hook
-  useEffect(() => {
-    if (stage !== 'exam' || timeLeft <= 0) return;
-
-    const timer = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          handleFinalSubmit(true); // Auto-submit when time expires
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [stage, timeLeft]);
-
   // 5. Submit Exam Handler
   const handleFinalSubmit = useCallback(
     async (isAutoSubmit = false) => {
@@ -653,6 +642,68 @@ export function StudentPortal({
     [activeStudent, activeRoom, roomQuestions, selectedAnswers, warningsCount, submitting, onExamSubmitted],
   );
 
+  // Tab-Switch Proctoring Telemetry Hook
+  useEffect(() => {
+    if (stage !== 'exam') return;
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        setWarningsCount((prev) => {
+          const next = prev + 1;
+          if (next <= 2) {
+            const msg = `⚠️ Warning ${next}/2: Tab switch or window minimization detected! Exceeding 2 warnings will terminate your exam and flag for malpractice.`;
+            setWarningToast(msg);
+
+            if (activeStudent && activeRoom) {
+              logProctoringIncident({
+                event_type: 'tab_switch',
+                details: `Student ${activeStudent.name} (${activeStudent.register_no}) switched tab. Warning #${next}/2`,
+              });
+            }
+            setTimeout(() => setWarningToast(null), 5000);
+          } else {
+            const msg = `🚨 EXAM TERMINATED: Exceeded 2 warnings! Session automatically marked as FLAGGED for malpractice.`;
+            setWarningToast(msg);
+
+            if (activeStudent && activeRoom) {
+              logProctoringIncident({
+                event_type: 'tab_switch_terminated',
+                details: `Student ${activeStudent.name} (${activeStudent.register_no}) exceeded 2 warnings. Exam terminated & FLAGGED.`,
+              });
+            }
+            setTimeout(() => {
+              handleFinalSubmit(false);
+            }, 600);
+          }
+          return next;
+        });
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [stage, activeStudent, activeRoom, handleFinalSubmit]);
+
+  // 4. Live Exam Countdown Timer Hook
+  useEffect(() => {
+    if (stage !== 'exam' || timeLeft <= 0) return;
+
+    const timer = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          handleFinalSubmit(true); // Auto-submit when time expires
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [stage, timeLeft, handleFinalSubmit]);
+
   // Format time remaining MM:SS
   const formattedTime = useMemo(() => {
     const m = Math.floor(timeLeft / 60);
@@ -690,6 +741,12 @@ export function StudentPortal({
             rooms={rooms}
             onStartExam={handleLaunchQuiz}
             loading={loading}
+            onLogout={() => {
+              safeStorage.removeItem('exora_session_reg');
+              safeStorage.removeItem('exora_student_profile');
+              setActiveStudent(null);
+              if (onLogoutStudent) onLogoutStudent();
+            }}
           />
         )}
 

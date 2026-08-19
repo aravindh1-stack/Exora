@@ -24,16 +24,16 @@ const NAV: { id: Section; label: string; icon: LucideIcon }[] = [
   { id: 'students', label: 'Students', icon: Users },
 ];
 
-export function Sidebar({ active, onChange, studentCount, questionCount }: SidebarProps) {
+export function Sidebar({ active, onChange, studentCount, questionCount, roomCount = 0 }: SidebarProps) {
   return (
     <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-brand-200/70 bg-white transition-colors dark:border-zinc-800/70 dark:bg-[#0a0b0d] md:flex">
-      <div className="flex items-center gap-3 px-6 py-6">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-900 text-white dark:bg-white dark:text-brand-950">
-          <ShieldCheck className="h-4 w-4" strokeWidth={2} />
+      <div className="flex items-center gap-3 px-6 py-6 border-b border-brand-100 dark:border-zinc-800/60">
+        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-950 text-white dark:bg-white dark:text-brand-950 shadow-subtle">
+          <ShieldCheck className="h-5 w-5" strokeWidth={2} />
         </div>
         <div>
           <h1 className="font-display text-[15px] font-bold tracking-tight text-brand-950 dark:text-white">
-            Exora
+            Exora Admin
           </h1>
           <p className="text-[10px] font-semibold uppercase tracking-wider text-brand-400 dark:text-zinc-500">
             Proctor Console
@@ -41,44 +41,50 @@ export function Sidebar({ active, onChange, studentCount, questionCount }: Sideb
         </div>
       </div>
 
-      <nav className="mt-3 flex flex-col gap-0.5 px-3">
+      <nav className="mt-4 flex flex-col gap-1 px-3">
         <p className="px-3 pb-2 text-[10px] font-bold uppercase tracking-wider text-brand-300 dark:text-zinc-600">
-          Workspace
+          Admin Workspace
         </p>
         {NAV.map((item) => {
           const isActive = active === item.id;
           const Icon = item.icon;
           const badge =
-            item.id === 'students' ? studentCount : item.id === 'questions' ? questionCount : null;
+            item.id === 'students'
+              ? studentCount
+              : item.id === 'questions'
+                ? questionCount
+                : item.id === 'rooms'
+                  ? roomCount
+                  : null;
           return (
             <button
               key={item.id}
               onClick={() => onChange(item.id)}
-              className={`relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-colors ${
+              className={`relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-xs font-semibold transition-colors ${
                 isActive
                   ? 'text-brand-950 dark:text-white'
-                  : 'text-brand-500 hover:bg-brand-50 hover:text-brand-900 dark:text-zinc-500 dark:hover:bg-zinc-900/70 dark:hover:text-zinc-100'
+                  : 'text-brand-500 hover:bg-brand-50 hover:text-brand-950 dark:text-zinc-400 dark:hover:bg-zinc-900/70 dark:hover:text-zinc-100'
               }`}
             >
               {isActive && (
                 <motion.div
                   layoutId="sidebar-active"
-                  className="absolute inset-0 rounded-lg border border-brand-200 bg-brand-50 dark:border-zinc-800 dark:bg-zinc-900"
+                  className="absolute inset-0 rounded-xl border border-brand-200 bg-brand-50 dark:border-zinc-800 dark:bg-zinc-900"
                   transition={{ type: 'spring', stiffness: 400, damping: 35 }}
                 />
               )}
               <Icon
                 className={`relative h-4 w-4 ${
-                  isActive ? 'text-brand-800 dark:text-zinc-100' : 'text-brand-400 dark:text-zinc-500'
+                  isActive ? 'text-brand-950 dark:text-zinc-100' : 'text-brand-400 dark:text-zinc-500'
                 }`}
                 strokeWidth={1.8}
               />
               <span className="relative">{item.label}</span>
               {badge !== null && (
                 <span
-                  className={`relative ml-auto rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${
+                  className={`relative ml-auto rounded-md px-1.5 py-0.5 text-[10px] font-bold font-mono ${
                     isActive
-                      ? 'bg-brand-200/60 text-brand-800 dark:bg-zinc-800 dark:text-zinc-300'
+                      ? 'bg-brand-200/80 text-brand-950 dark:bg-zinc-800 dark:text-zinc-200'
                       : 'bg-brand-50 text-brand-400 dark:bg-zinc-900 dark:text-zinc-500'
                   }`}
                 >
@@ -93,8 +99,8 @@ export function Sidebar({ active, onChange, studentCount, questionCount }: Sideb
       <div className="mt-auto px-4 pb-5">
         <div className="rounded-xl border border-brand-200/70 bg-brand-50/60 p-3.5 dark:border-zinc-800/70 dark:bg-zinc-950">
           <div className="flex items-center gap-2">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-            <span className="text-xs font-semibold text-brand-800 dark:text-zinc-200">
+            <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="text-xs font-bold text-brand-950 dark:text-zinc-200">
               System Operational
             </span>
           </div>
@@ -109,7 +115,7 @@ export function Sidebar({ active, onChange, studentCount, questionCount }: Sideb
 
 export function MobileNav({ active, onChange }: { active: Section; onChange: (s: Section) => void }) {
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-brand-200/70 bg-white/95 backdrop-blur-md dark:border-zinc-800/70 dark:bg-black/95 md:hidden">
+    <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-brand-200/70 bg-white/95 backdrop-blur-md dark:border-zinc-800/70 dark:bg-[#08090b]/95 md:hidden">
       <div className="flex items-center justify-around px-2 py-1.5">
         {NAV.map((item) => {
           const isActive = active === item.id;
@@ -118,7 +124,7 @@ export function MobileNav({ active, onChange }: { active: Section; onChange: (s:
             <button
               key={item.id}
               onClick={() => onChange(item.id)}
-              className={`relative flex flex-1 flex-col items-center gap-1 rounded-lg py-1.5 text-[11px] font-medium transition-colors ${
+              className={`relative flex flex-1 flex-col items-center gap-1 rounded-lg py-1.5 text-[11px] font-semibold transition-colors ${
                 isActive ? 'text-brand-950 dark:text-white' : 'text-brand-400 dark:text-zinc-500'
               }`}
             >

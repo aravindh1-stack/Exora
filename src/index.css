@@ -15,7 +15,7 @@ body {
   margin: 0;
   background-color: #f7f8fa;
   color: #14161c;
-  font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  font-family: 'Urbanist', ui-sans-serif, system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   transition: background-color 0.2s ease, color 0.2s ease;
@@ -61,4 +61,4 @@ body {
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
 /* Enterprise heading font */
-.font-display { font-family: 'Space Grotesk', 'Inter', sans-serif; }
+.font-display { font-family: 'Urbanist', 'Inter', sans-serif; }

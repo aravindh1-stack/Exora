@@ -2,9 +2,12 @@ import { useState, useEffect, useCallback } from 'react';
 import type { StudentWithSession, ExamRoom, Question } from '@/lib/types';
 import { StudentPortal } from '@/components/StudentPortal';
 import { LandingPage } from '@/components/LandingPage';
+import { StudentAuth } from '@/components/StudentAuth';
 import { fetchQuestions, fetchStudentsWithSessions, fetchExamRooms } from '@/lib/queries';
 import { safeStorage } from '@/lib/storage';
 import { PortalErrorBoundary } from '@/components/PortalErrorBoundary';
+
+type ViewState = 'landing' | 'student_auth' | 'student_portal';
 
 export function StudentApp() {
   const [students, setStudents] = useState<StudentWithSession[]>([]);
@@ -13,13 +16,11 @@ export function StudentApp() {
   const [apiError, setApiError] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
 
-  // Skip the landing page automatically if a session is already mid-flight
-  // (e.g. URL has ?reg=&room= or SEB relaunch) so we never interrupt an active exam.
-  const [showLanding, setShowLanding] = useState<boolean>(() => {
+  const [viewState, setViewState] = useState<ViewState>(() => {
     const params = new URLSearchParams(window.location.search);
     const hasActiveSession =
       params.get('reg') || safeStorage.getItem('exora_session_reg');
-    return !hasActiveSession;
+    return hasActiveSession ? 'student_portal' : 'landing';
   });
 
   const loadData = useCallback(async () => {
@@ -46,8 +47,18 @@ export function StudentApp() {
     loadData();
   }, [loadData]);
 
-  if (showLanding) {
-    return <LandingPage onEnterPortal={() => setShowLanding(false)} />;
+  if (viewState === 'landing') {
+    return <LandingPage onEnterPortal={() => setViewState('student_auth')} />;
+  }
+
+  if (viewState === 'student_auth') {
+    return (
+      <StudentAuth
+        existingStudents={students}
+        onAuthSuccess={() => setViewState('student_portal')}
+        onBackToLanding={() => setViewState('landing')}
+      />
+    );
   }
 
   return (
@@ -62,6 +73,7 @@ export function StudentApp() {
           apiError={apiError}
           onRetryFetch={loadData}
           loading={loading}
+          onLogoutStudent={() => setViewState('student_auth')}
         />
       </PortalErrorBoundary>
     </div>

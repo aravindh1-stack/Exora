@@ -42,6 +42,39 @@ export async function fetchStudentsWithSessions(): Promise<StudentWithSession[]>
   });
 }
 
+export async function fetchStudentByRegisterNo(registerNo: string): Promise<StudentWithSession | null> {
+  const normReg = registerNo.trim();
+  if (!normReg) return null;
+
+  const { data: student, error: sErr } = await supabase
+    .from('students')
+    .select('*')
+    .ilike('register_no', normReg)
+    .maybeSingle();
+
+  if (sErr || !student) return null;
+
+  const { data: sessions, error: eErr } = await supabase
+    .from('exam_sessions')
+    .select('*')
+    .eq('student_id', student.id)
+    .order('created_at', { ascending: false });
+
+  const latest = sessions && sessions.length > 0 ? sessions[0] : null;
+
+  return {
+    ...student,
+    department: student.department ?? 'Electronics & Communication',
+    year: Number(student.year) || 3,
+    semester: Number(student.semester) || 5,
+    status: latest?.status ?? 'in_progress',
+    score: latest ? Number(latest.score) : 0,
+    flag_reason: latest?.flag_reason ?? null,
+    completed_at: latest?.completed_at ?? null,
+    session_id: latest?.id ?? null,
+  };
+}
+
 export type StudentInput = Omit<Student, 'id' | 'created_at'>;
 
 export async function createStudent(input: StudentInput): Promise<Student> {

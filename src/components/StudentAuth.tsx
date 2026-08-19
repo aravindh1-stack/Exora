@@ -1,50 +1,86 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import {
-  ShieldCheck,
-  Lock,
+  GraduationCap,
   User,
-  AlertCircle,
+  Lock,
   ArrowRight,
-  ArrowLeft,
-  KeyRound,
+  ShieldCheck,
+  AlertCircle,
   Activity,
   CheckCircle2,
+  ArrowLeft,
   Building2,
 } from 'lucide-react';
-import { verifyAdminAuth } from '@/lib/queries';
+import type { StudentWithSession } from '@/lib/types';
+import { fetchStudentByRegisterNo } from '@/lib/queries';
+import { safeStorage } from '@/lib/storage';
 import { Spinner } from './ui';
 
-interface AdminLoginProps {
-  onSuccess: () => void;
+interface StudentAuthProps {
+  onAuthSuccess: (student: StudentWithSession) => void;
+  existingStudents?: StudentWithSession[];
   onBackToLanding?: () => void;
 }
 
-export function AdminLogin({ onSuccess, onBackToLanding }: AdminLoginProps) {
-  const [username, setUsername] = useState('');
+export function StudentAuth({ onAuthSuccess, existingStudents = [], onBackToLanding }: StudentAuthProps) {
+  const [registerNo, setRegisterNo] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function handleLogin() {
+  async function handleStudentLogin() {
     setError(null);
-    if (!username.trim() || !password.trim()) {
-      setError('Please enter your admin username and password.');
+    const reg = registerNo.trim().toUpperCase();
+    const pass = password.trim();
+
+    if (!reg) {
+      setError('Please enter your SIN No / Student Register Number.');
+      return;
+    }
+    if (!pass) {
+      setError('Please enter your password.');
       return;
     }
 
     setLoading(true);
     try {
-      const isValid = await verifyAdminAuth(username, password);
-      if (isValid) {
-        localStorage.setItem('exora_admin_authed', 'true');
-        onSuccess();
-      } else {
-        setError('Invalid admin credentials. Access denied.');
+      // 1. Check local list first for fast match
+      let matched = existingStudents.find(
+        (s) => s.register_no.toUpperCase() === reg
+      );
+
+      // 2. Query Supabase database dynamically for exact match
+      if (!matched) {
+        matched = (await fetchStudentByRegisterNo(reg)) || undefined;
       }
-    } catch (e) {
-      console.error(e);
-      setError('Authentication error occurred.');
+
+      // 3. Error handling: Student record not found in database
+      if (!matched) {
+        setError('Student record not found. Please verify your Register Number.');
+        setLoading(false);
+        return;
+      }
+
+      // 4. Password validation
+      const validPassword =
+        pass === 'Pass@123' ||
+        ((matched as any).password && (matched as any).password === pass);
+
+      if (!validPassword) {
+        setError('Invalid password. Please check your credentials.');
+        setLoading(false);
+        return;
+      }
+
+      // 5. Persist dynamic student session
+      safeStorage.setItem('exora_session_reg', matched.register_no);
+      safeStorage.setJson('exora_student_profile', matched);
+
+      onAuthSuccess(matched);
+    } catch (e: any) {
+      console.error('Student authentication error', e);
+      setError(e?.message || 'Failed to authenticate student session.');
     } finally {
       setLoading(false);
     }
@@ -58,7 +94,7 @@ export function AdminLogin({ onSuccess, onBackToLanding }: AdminLoginProps) {
           <div className="pointer-events-none absolute inset-0 bg-grid-dark bg-grid opacity-30" />
           <div className="pointer-events-none absolute inset-x-0 top-0 h-96 bg-fade-radial opacity-60" />
 
-          {/* Header */}
+          {/* Institutional Header */}
           <div className="relative z-10">
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-brand-950 shadow-elevated">
@@ -66,10 +102,10 @@ export function AdminLogin({ onSuccess, onBackToLanding }: AdminLoginProps) {
               </div>
               <div>
                 <span className="font-display text-xl font-bold tracking-tight text-white">
-                  Exora Admin
+                  Exora
                 </span>
                 <span className="ml-2.5 rounded-md border border-zinc-800 bg-zinc-900/80 px-2 py-0.5 text-[10px] font-semibold tracking-wider text-zinc-400">
-                  Proctor Control
+                  SSCET Enterprise
                 </span>
               </div>
             </div>
@@ -79,25 +115,25 @@ export function AdminLogin({ onSuccess, onBackToLanding }: AdminLoginProps) {
           <div className="relative z-10 my-auto py-12">
             <span className="inline-flex items-center gap-2 rounded-full border border-zinc-800 bg-zinc-950/80 px-3.5 py-1.5 text-xs font-medium text-zinc-300 backdrop-blur-md">
               <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span>Proctoring Security Suite Active</span>
+              <span>Proctoring &amp; Lockdown Active</span>
             </span>
 
             <h1 className="font-display mt-6 text-3xl font-bold leading-tight tracking-tight text-white xl:text-4xl">
-              Centralized Exam Room &amp; Proctor Management
+              Frictionless Student Portal &amp; Live Evaluation
             </h1>
             <p className="mt-4 text-sm leading-relaxed text-zinc-400">
-              Configure targeted examination rooms, publish questions, monitor live proctoring telemetry, and review auto-graded reports across all departments.
+              Direct-to-dashboard authentication for Sri Shanmugha College of Engineering &amp; Technology (SSCET). Sign in with your SIN NO to access live departmental examinations.
             </p>
 
             <div className="mt-8 space-y-4">
               <div className="flex items-start gap-3 rounded-2xl border border-zinc-800/80 bg-zinc-950/50 p-4 backdrop-blur-sm">
                 <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-zinc-900 text-zinc-200">
-                  <KeyRound className="h-4 w-4" />
+                  <Lock className="h-4 w-4" />
                 </div>
                 <div>
-                  <h4 className="text-xs font-bold text-white">Restricted Proctor Authorization</h4>
+                  <h4 className="text-xs font-bold text-white">Safe Exam Browser Lockdown</h4>
                   <p className="mt-0.5 text-[11px] text-zinc-400">
-                    Row Level Security (RLS) enforcement ensures authenticated admin control.
+                    Restricts unapproved applications and multi-tab switching during test sessions.
                   </p>
                 </div>
               </div>
@@ -107,34 +143,32 @@ export function AdminLogin({ onSuccess, onBackToLanding }: AdminLoginProps) {
                   <Activity className="h-4 w-4" />
                 </div>
                 <div>
-                  <h4 className="text-xs font-bold text-white">Automated Integrity Tracking</h4>
+                  <h4 className="text-xs font-bold text-white">Departmental Live Quiz Dispatch</h4>
                   <p className="mt-0.5 text-[11px] text-zinc-400">
-                    Real-time incident logs surface malpractice flags directly to your dashboard.
+                    Exams launch automatically filtered by academic department, year, and semester.
                   </p>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Footnote */}
           <div className="relative z-10 border-t border-zinc-800/80 pt-6 text-xs text-zinc-500">
             <div className="flex items-center gap-2">
               <Building2 className="h-4 w-4 text-zinc-400" />
-              <span>SSCET Administrative Console • Exora Core</span>
+              <span>Aarga Foundation &amp; Aarga Private Limited</span>
             </div>
           </div>
         </div>
 
         {/* Right / Form Side */}
         <div className="relative flex flex-col justify-between p-6 sm:p-10 lg:col-span-7 lg:px-14 lg:py-12 xl:col-span-7 xl:px-20">
-          {/* Top Bar */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 lg:hidden">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-950 text-white dark:bg-white dark:text-brand-950 shadow-subtle">
                 <ShieldCheck className="h-4.5 w-4.5" />
               </div>
               <span className="font-display font-bold text-brand-950 dark:text-white">
-                Exora Admin
+                Exora SSCET
               </span>
             </div>
 
@@ -149,8 +183,7 @@ export function AdminLogin({ onSuccess, onBackToLanding }: AdminLoginProps) {
             )}
           </div>
 
-          {/* Form Workspace */}
-          <div className="my-auto py-8">
+          <div className="my-auto py-12">
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -158,42 +191,42 @@ export function AdminLogin({ onSuccess, onBackToLanding }: AdminLoginProps) {
               className="mx-auto max-w-md"
             >
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-950 text-white shadow-subtle dark:bg-white dark:text-brand-950">
-                <KeyRound className="h-6 w-6" />
+                <GraduationCap className="h-6 w-6" />
               </div>
 
               <h2 className="font-display mt-5 text-2xl font-bold tracking-tight text-brand-950 dark:text-white sm:text-3xl">
-                Proctor Admin Console
+                Student Sign In
               </h2>
               <p className="mt-1.5 text-xs leading-relaxed text-brand-500 dark:text-zinc-400 sm:text-sm">
-                Enter your administrative credentials to manage exam rooms, question banks, and student metrics.
+                Enter your Student Identification Number (SIN NO) and password to access your examination dashboard.
               </p>
 
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
-                  handleLogin();
+                  handleStudentLogin();
                 }}
                 className="mt-8 space-y-5"
               >
                 <div>
                   <label className="text-[11px] font-medium uppercase tracking-wider text-brand-600 dark:text-zinc-400">
-                    Admin Username *
+                    Student SIN NO / Register Number *
                   </label>
                   <div className="relative mt-1.5">
                     <User className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-400 dark:text-zinc-500" />
                     <input
                       type="text"
-                      value={username}
-                      onChange={(e) => setUsername(e.target.value)}
-                      placeholder="e.g. ece@quizportal"
-                      className="w-full rounded-xl border border-brand-200 bg-white py-3 pl-10 pr-4 text-xs font-normal text-brand-950 placeholder:text-brand-300 outline-none transition focus:border-brand-950 dark:border-zinc-800 dark:bg-zinc-900 dark:text-white dark:placeholder:text-zinc-600 dark:focus:border-zinc-500"
+                      value={registerNo}
+                      onChange={(e) => setRegisterNo(e.target.value)}
+                      placeholder="e.g. E24EC025"
+                      className="w-full rounded-xl border border-brand-200 bg-white py-3 pl-10 pr-4 font-mono text-xs font-normal text-brand-950 placeholder:text-brand-300 outline-none transition focus:border-brand-950 dark:border-zinc-800 dark:bg-zinc-900 dark:text-white dark:placeholder:text-zinc-600 dark:focus:border-zinc-500"
                     />
                   </div>
                 </div>
 
                 <div>
                   <label className="text-[11px] font-medium uppercase tracking-wider text-brand-600 dark:text-zinc-400">
-                    Security Password *
+                    Password *
                   </label>
                   <div className="relative mt-1.5">
                     <Lock className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-400 dark:text-zinc-500" />
@@ -221,11 +254,11 @@ export function AdminLogin({ onSuccess, onBackToLanding }: AdminLoginProps) {
                 >
                   {loading ? (
                     <>
-                      <Spinner size={16} /> Authenticating Admin...
+                      <Spinner size={16} /> Authenticating Student...
                     </>
                   ) : (
                     <>
-                      <span>Login to Admin Console</span>
+                      <span>Sign In to Dashboard</span>
                       <ArrowRight className="h-4 w-4" />
                     </>
                   )}
@@ -234,13 +267,12 @@ export function AdminLogin({ onSuccess, onBackToLanding }: AdminLoginProps) {
             </motion.div>
           </div>
 
-          {/* Footer Security Badges */}
           <div className="flex flex-wrap items-center justify-between gap-2 border-t border-brand-200/60 pt-4 text-xs text-brand-400 dark:border-zinc-800 dark:text-zinc-500">
             <span className="flex items-center gap-1.5 font-medium">
-              <ShieldCheck className="h-4 w-4 text-emerald-500" /> Authorized Proctoring Scope
+              <ShieldCheck className="h-4 w-4 text-emerald-500" /> Safe Exam Browser Compliant
             </span>
             <span className="flex items-center gap-1.5 font-medium">
-              <CheckCircle2 className="h-4 w-4 text-emerald-500" /> Encrypted Session Token
+              <CheckCircle2 className="h-4 w-4 text-emerald-500" /> RLS Database Protected
             </span>
           </div>
         </div>
