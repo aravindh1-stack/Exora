@@ -392,7 +392,8 @@ function App() {
                 {section === 'questions' && (
                   <Questions
                     questions={questions}
-                    loading={loadingQuestions}
+                    rooms={rooms}
+                    loading={loadingQuestions || loadingRooms}
                     onReload={loadQuestions}
                   />
                 )}
