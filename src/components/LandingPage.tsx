@@ -56,9 +56,14 @@ export function LandingPage({ onEnterPortal, onEnterAdmin }: LandingPageProps) {
       {/* Header Navigation */}
       <header className="relative z-10 mx-auto flex max-w-6xl items-center justify-between px-6 py-6 sm:px-8">
         <div className="flex items-center gap-2.5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-950 text-white shadow-subtle dark:bg-white dark:text-brand-950">
-            <ShieldCheck className="h-4.5 w-4.5" strokeWidth={2} />
-          </div>
+          <img
+            src="/aarga-logo.png"
+            alt="Aarga Logo"
+            className="h-9 w-auto max-w-[120px] object-contain"
+            onError={(e) => {
+              e.currentTarget.style.display = 'none';
+            }}
+          />
           <div>
             <span className="font-display text-lg font-bold tracking-tight text-brand-950 dark:text-white">
               Exora

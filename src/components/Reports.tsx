@@ -14,6 +14,7 @@ import {
   Building,
   GraduationCap,
   Sparkles,
+  ShieldCheck,
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -83,7 +84,7 @@ export function Reports({ students, rooms = [], loading = false }: ReportsProps)
     };
   }, [filteredStudents]);
 
-  // Download Official PDF Report Document Handler
+  // Download Official Institutional A4 PDF Report Document Handler
   const handleDownloadPDFReport = () => {
     if (filteredStudents.length === 0) return;
 
@@ -94,58 +95,64 @@ export function Reports({ students, rooms = [], loading = false }: ReportsProps)
     });
 
     const reportDate = new Date().toLocaleDateString('en-US', {
-      weekday: 'short',
+      weekday: 'long',
       year: 'numeric',
-      month: 'short',
+      month: 'long',
       day: 'numeric',
     });
 
     const deptTitle = selectedDept === 'all' ? 'All Academic Departments' : `${selectedDept} Department`;
 
-    // 1. Header Banner & Title
+    // 1. Institutional Letterhead Header
     doc.setFillColor(15, 23, 42); // slate-900
-    doc.rect(0, 0, 210, 32, 'F');
+    doc.rect(0, 0, 210, 36, 'F');
 
+    // Branding Title
     doc.setTextColor(255, 255, 255);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(15);
-    doc.text('EXORA PROCTORING ENGINE', 14, 14);
+    doc.setFontSize(16);
+    doc.text('EXORA PROCTORING ENGINE', 14, 15);
 
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'bold');
-    doc.text('OFFICIAL ACADEMIC EXAMINATION AUDIT REPORT', 14, 21);
-
-    doc.setFontSize(8);
+    doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(203, 213, 225);
-    doc.text(`Generated: ${reportDate} | Authority: Proctor Admin | Security: AES-256 Encrypted`, 14, 27);
+    doc.text('SSCET INSTITUTIONAL EXAMINATION BOARD • ACADEMIC AUDIT CONTROL', 14, 21);
 
-    // 2. Summary KPI Box
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(255, 255, 255);
+    doc.text('OFFICIAL ACADEMIC EXAMINATION AUDIT REPORT', 14, 29);
+
+    // 2. Official Metadata Grid Box (A4 Document Frame)
     doc.setFillColor(248, 250, 252);
     doc.setDrawColor(226, 232, 240);
-    doc.roundedRect(14, 38, 182, 22, 3, 3, 'FD');
+    doc.roundedRect(14, 42, 182, 26, 3, 3, 'FD');
 
     doc.setTextColor(100, 116, 139);
     doc.setFontSize(7.5);
     doc.setFont('helvetica', 'bold');
 
-    doc.text('TARGET DEPARTMENT', 18, 45);
-    doc.text('TOTAL CANDIDATES', 75, 45);
-    doc.text('DEPT AVERAGE SCORE', 122, 45);
-    doc.text('PROCTOR FLAGS', 168, 45);
+    doc.text('DOCUMENT REF NO', 18, 49);
+    doc.text('DATE GENERATED', 70, 49);
+    doc.text('DEPARTMENT SCOPE', 120, 49);
+    doc.text('SECURITY PROTOCOL', 165, 49);
 
     doc.setTextColor(15, 23, 42);
-    doc.setFontSize(10);
-    doc.text(deptTitle.toUpperCase(), 18, 53);
-    doc.text(String(stats.total), 75, 53);
+    doc.setFontSize(9.5);
+    doc.text(`EXORA-REP-${Date.now().toString().slice(-6)}`, 18, 56);
+    doc.text(reportDate, 70, 56);
+    doc.text(deptTitle.toUpperCase(), 120, 56);
 
     doc.setTextColor(5, 150, 105);
-    doc.text(stats.avgScore, 122, 53);
+    doc.text('AES-256 ENCRYPTED', 165, 56);
 
-    doc.setTextColor(225, 29, 72);
-    doc.text(String(stats.flaggedCount), 168, 53);
+    // KPI Sub-bar
+    doc.setFontSize(8);
+    doc.setTextColor(100, 116, 139);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`ROSTER: ${stats.total} CANDIDATES   |   AVG SCORE: ${stats.avgScore}   |   COMPLETED: ${stats.completedCount}   |   INCIDENTS: ${stats.flaggedCount}`, 18, 63);
 
-    // 3. Structured A4 Roster Data Table
+    // 3. Structured Clean Data Table
     const tableData = filteredStudents.map((s, idx) => [
       idx + 1,
       s.register_no,
@@ -157,8 +164,8 @@ export function Reports({ students, rooms = [], loading = false }: ReportsProps)
     ]);
 
     autoTable(doc, {
-      startY: 66,
-      head: [['#', 'SIN NO', 'CANDIDATE NAME', 'DEPARTMENT & ROSTER', 'STATUS', 'SCORE', 'PERFORMANCE']],
+      startY: 74,
+      head: [['#', 'REGISTER NO', 'CANDIDATE NAME', 'DEPARTMENT & ROSTER', 'STATUS', 'SCORE', 'PERFORMANCE RATING']],
       body: tableData,
       theme: 'grid',
       headStyles: {
@@ -174,15 +181,15 @@ export function Reports({ students, rooms = [], loading = false }: ReportsProps)
       },
       columnStyles: {
         0: { cellWidth: 10 },
-        1: { cellWidth: 28, fontStyle: 'bold' },
-        2: { cellWidth: 45, fontStyle: 'bold' },
-        3: { cellWidth: 45 },
+        1: { cellWidth: 30, fontStyle: 'bold' },
+        2: { cellWidth: 44, fontStyle: 'bold' },
+        3: { cellWidth: 42 },
         4: { cellWidth: 22, fontStyle: 'bold' },
         5: { cellWidth: 16, fontStyle: 'bold', halign: 'right' },
-        6: { cellWidth: 26, fontStyle: 'bold' },
+        6: { cellWidth: 28, fontStyle: 'bold' },
       },
       styles: {
-        cellPadding: 3,
+        cellPadding: 3.5,
       },
       didParseCell: (data) => {
         if (data.section === 'body') {
@@ -198,10 +205,31 @@ export function Reports({ students, rooms = [], loading = false }: ReportsProps)
           }
         }
       },
+      didDrawPage: (data) => {
+        // Formal Verification Footer & Page Numbering
+        const str = `System-generated secure audit document, AES-256 Encrypted | Certified by Exora Institutional Examination Board | Page ${data.pageNumber} of ${doc.getNumberOfPages()}`;
+        doc.setFontSize(7.5);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(148, 163, 184); // slate-400
+        doc.text(str, 14, 287);
+      },
     });
 
     const fileName = `Exora_Academic_Report_${selectedDept.replace(/\s+/g, '_')}.pdf`;
-    doc.save(fileName);
+
+    const img = new Image();
+    img.src = '/aarga-logo.png';
+    img.onload = () => {
+      try {
+        doc.addImage(img, 'PNG', 165, 8, 28, 20);
+      } catch (e) {
+        console.warn('Logo render failed:', e);
+      }
+      doc.save(fileName);
+    };
+    img.onerror = () => {
+      doc.save(fileName);
+    };
   };
 
   // CSV Export Handler

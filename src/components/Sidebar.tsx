@@ -30,9 +30,15 @@ export function Sidebar({ active, onChange, studentCount, questionCount, roomCou
   return (
     <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-brand-200/70 bg-white transition-colors dark:border-zinc-800/70 dark:bg-[#0a0b0d] md:flex">
       <div className="flex h-16 shrink-0 items-center gap-3 px-6 border-b border-slate-200/80 dark:border-zinc-800/80">
-        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-950 text-white dark:bg-white dark:text-brand-950 shadow-subtle">
-          <ShieldCheck className="h-5 w-5" strokeWidth={2} />
-        </div>
+        <img
+          src="/aarga-logo.png"
+          alt="Aarga Logo"
+          className="h-9 w-auto max-w-[120px] object-contain"
+          onError={(e) => {
+            // fallback if logo fails to load
+            e.currentTarget.style.display = 'none';
+          }}
+        />
         <div>
           <h1 className="font-display text-[15px] font-bold tracking-tight text-brand-950 dark:text-white">
             Exora Admin

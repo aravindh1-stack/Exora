@@ -47,6 +47,29 @@ export function StudentApp() {
     loadData();
   }, [loadData]);
 
+  const handleLogoutStudent = useCallback(() => {
+    safeStorage.removeItem('exora_session_reg');
+    safeStorage.removeItem('exora_session_room');
+    safeStorage.removeItem('exora_session_stage');
+    safeStorage.removeItem('exora_student_profile');
+    try {
+      localStorage.removeItem('exora_session_reg');
+      localStorage.removeItem('exora_session_room');
+      localStorage.removeItem('exora_session_stage');
+      localStorage.removeItem('exora_student_profile');
+      sessionStorage.clear();
+    } catch (e) {}
+
+    const url = new URL(window.location.href);
+    url.searchParams.delete('reg');
+    url.searchParams.delete('room');
+    url.searchParams.delete('stage');
+    url.searchParams.delete('mode');
+    window.history.replaceState({}, '', url.pathname);
+
+    setViewState('student_auth');
+  }, []);
+
   if (viewState === 'landing') {
     return <LandingPage onEnterPortal={() => setViewState('student_auth')} />;
   }
@@ -73,7 +96,7 @@ export function StudentApp() {
           apiError={apiError}
           onRetryFetch={loadData}
           loading={loading}
-          onLogoutStudent={() => setViewState('student_auth')}
+          onLogoutStudent={handleLogoutStudent}
         />
       </PortalErrorBoundary>
     </div>

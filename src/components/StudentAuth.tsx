@@ -97,9 +97,14 @@ export function StudentAuth({ onAuthSuccess, existingStudents = [], onBackToLand
           {/* Institutional Header */}
           <div className="relative z-10">
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-brand-950 shadow-elevated">
-                <ShieldCheck className="h-5 w-5" strokeWidth={2.2} />
-              </div>
+              <img
+                src="/aarga-logo.png"
+                alt="Aarga Logo"
+                className="h-10 w-auto max-w-[140px] object-contain"
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                }}
+              />
               <div>
                 <span className="font-display text-xl font-bold tracking-tight text-white">
                   Exora
@@ -190,8 +195,18 @@ export function StudentAuth({ onAuthSuccess, existingStudents = [], onBackToLand
               transition={{ duration: 0.35, ease: 'easeOut' }}
               className="mx-auto max-w-md"
             >
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-950 text-white shadow-subtle dark:bg-white dark:text-brand-950">
-                <GraduationCap className="h-6 w-6" />
+              <div className="flex items-center gap-3">
+                <img
+                  src="/aarga-logo.png"
+                  alt="Aarga Logo"
+                  className="h-10 w-auto max-w-[130px] object-contain"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                  }}
+                />
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-950 text-white shadow-subtle dark:bg-white dark:text-brand-950">
+                  <GraduationCap className="h-5 w-5" />
+                </div>
               </div>
 
               <h2 className="font-display mt-5 text-2xl font-bold tracking-tight text-brand-950 dark:text-white sm:text-3xl">

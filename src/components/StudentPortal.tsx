@@ -777,7 +777,22 @@ export function StudentPortal({
             loading={loading}
             onLogout={() => {
               safeStorage.removeItem('exora_session_reg');
+              safeStorage.removeItem('exora_session_room');
+              safeStorage.removeItem('exora_session_stage');
               safeStorage.removeItem('exora_student_profile');
+              try {
+                localStorage.removeItem('exora_session_reg');
+                localStorage.removeItem('exora_session_room');
+                localStorage.removeItem('exora_session_stage');
+                localStorage.removeItem('exora_student_profile');
+                sessionStorage.clear();
+              } catch (e) {}
+              const url = new URL(window.location.href);
+              url.searchParams.delete('reg');
+              url.searchParams.delete('room');
+              url.searchParams.delete('stage');
+              url.searchParams.delete('mode');
+              window.history.replaceState({}, '', url.pathname);
               setActiveStudent(null);
               if (onLogoutStudent) onLogoutStudent();
             }}

@@ -61,9 +61,14 @@ export function AdminLogin({ onSuccess, onBackToLanding }: AdminLoginProps) {
           {/* Header */}
           <div className="relative z-10">
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-brand-950 shadow-elevated">
-                <ShieldCheck className="h-5 w-5" strokeWidth={2.2} />
-              </div>
+              <img
+                src="/aarga-logo.png"
+                alt="Aarga Logo"
+                className="h-10 w-auto max-w-[140px] object-contain"
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                }}
+              />
               <div>
                 <span className="font-display text-xl font-bold tracking-tight text-white">
                   Exora Admin
