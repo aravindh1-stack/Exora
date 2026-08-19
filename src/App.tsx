@@ -19,16 +19,15 @@ import { safeStorage } from '@/lib/storage';
 type ViewMode = 'landing' | 'student_auth' | 'student_portal' | 'admin_login' | 'admin_console';
 
 function App() {
-  const hostname = window.location.hostname;
+  const hostname = (typeof window !== 'undefined' ? window.location.hostname : '').toLowerCase();
+  const pathname = (typeof window !== 'undefined' ? window.location.pathname : '').toLowerCase();
+  const search = (typeof window !== 'undefined' ? window.location.search : '').toLowerCase();
+
   const isAdminDomain =
-    hostname === 'poweratex.aarga.org' ||
-    hostname.startsWith('poweratex') ||
     hostname.includes('poweratex') ||
-    hostname === 'adminatexora.aarga.org' ||
-    hostname.startsWith('admin') ||
     hostname.includes('admin') ||
-    window.location.pathname.startsWith('/admin') ||
-    window.location.search.includes('mode=admin');
+    pathname.startsWith('/admin') ||
+    search.includes('mode=admin');
 
   // Admin Authentication State
   const [isAdminAuthed, setIsAdminAuthed] = useState<boolean>(() => {
