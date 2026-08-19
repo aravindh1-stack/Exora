@@ -27,6 +27,7 @@ import { matchStudentToRoom, fetchStudentResponses, type ExamResponseDetail } fr
 import { initials, formatTimeAgo } from '@/lib/format';
 import { safeStorage } from '@/lib/storage';
 
+import { Spinner } from './ui';
 import { MyQuizzes } from './MyQuizzes';
 
 type NavKey = 'dashboard' | 'quizzes' | 'performance' | 'profile';

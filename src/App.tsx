@@ -19,10 +19,14 @@ import { safeStorage } from '@/lib/storage';
 type ViewMode = 'landing' | 'student_auth' | 'student_portal' | 'admin_login' | 'admin_console';
 
 function App() {
+  const hostname = window.location.hostname;
   const isAdminDomain =
-    window.location.hostname === 'adminatexora.aarga.org' ||
-    window.location.hostname.startsWith('admin') ||
-    window.location.hostname.includes('admin') ||
+    hostname === 'poweratex.aarga.org' ||
+    hostname.startsWith('poweratex') ||
+    hostname.includes('poweratex') ||
+    hostname === 'adminatexora.aarga.org' ||
+    hostname.startsWith('admin') ||
+    hostname.includes('admin') ||
     window.location.pathname.startsWith('/admin') ||
     window.location.search.includes('mode=admin');
 
