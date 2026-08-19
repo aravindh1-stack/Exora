@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard,
@@ -18,6 +18,8 @@ import {
   Eye,
   X,
   Zap,
+  Sun,
+  Moon,
   type LucideIcon,
 } from 'lucide-react';
 import type { StudentWithSession, ExamRoom, Question } from '@/lib/types';
@@ -60,6 +62,26 @@ export function StudentDashboard({
   const [reviewLoading, setReviewLoading] = useState(false);
   const [reviewResponses, setReviewResponses] = useState<ExamResponseDetail[]>([]);
   const [reviewRoom, setReviewRoom] = useState<ExamRoom | null>(null);
+
+  // Student Dashboard Theme State
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    const saved = localStorage.getItem('exora_theme');
+    return saved === 'dark' ? 'dark' : 'light';
+  });
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (theme === 'dark') {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
+    localStorage.setItem('exora_theme', theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme((prev) => (prev === 'light' ? 'dark' : 'light'));
+  };
 
   // Notification Popover & Persistence State
   const [notifOpen, setNotifOpen] = useState(false);
@@ -304,6 +326,24 @@ export function StudentDashboard({
           </div>
 
           <div className="flex items-center gap-3">
+            {/* Theme Toggle Button */}
+            <button
+              onClick={toggleTheme}
+              className="flex items-center gap-1.5 rounded-xl border border-brand-200 bg-brand-50/70 px-2.5 py-1.5 text-xs font-semibold text-brand-700 transition hover:bg-brand-100/70 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800 cursor-pointer"
+              title="Toggle Light / Dark Theme"
+            >
+              {theme === 'light' ? (
+                <>
+                  <Moon className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Dark</span>
+                </>
+              ) : (
+                <>
+                  <Sun className="h-3.5 w-3.5 text-amber-400" />
+                  <span className="hidden sm:inline">Light</span>
+                </>
+              )}
+            </button>
             {/* Notification Bell Dropdown Popover */}
             <div className="relative">
               <button

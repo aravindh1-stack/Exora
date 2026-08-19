@@ -57,5 +57,5 @@ export interface StudentWithSession extends Student {
   room_id?: string | null;
 }
 
-export type Section = 'dashboard' | 'rooms' | 'questions' | 'students';
+export type Section = 'dashboard' | 'rooms' | 'questions' | 'students' | 'reports';
 

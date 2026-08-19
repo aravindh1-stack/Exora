@@ -5,6 +5,7 @@ import {
   FileQuestion,
   Users,
   ShieldCheck,
+  BarChart3,
   type LucideIcon,
 } from 'lucide-react';
 import type { Section } from '@/lib/types';
@@ -22,12 +23,13 @@ const NAV: { id: Section; label: string; icon: LucideIcon }[] = [
   { id: 'rooms', label: 'Exam Rooms', icon: DoorOpen },
   { id: 'questions', label: 'Questions', icon: FileQuestion },
   { id: 'students', label: 'Students', icon: Users },
+  { id: 'reports', label: 'Reports & Analytics', icon: BarChart3 },
 ];
 
 export function Sidebar({ active, onChange, studentCount, questionCount, roomCount = 0 }: SidebarProps) {
   return (
     <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-brand-200/70 bg-white transition-colors dark:border-zinc-800/70 dark:bg-[#0a0b0d] md:flex">
-      <div className="flex items-center gap-3 px-6 py-6 border-b border-brand-100 dark:border-zinc-800/60">
+      <div className="flex h-16 shrink-0 items-center gap-3 px-6 border-b border-slate-200/80 dark:border-zinc-800/80">
         <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-950 text-white dark:bg-white dark:text-brand-950 shadow-subtle">
           <ShieldCheck className="h-5 w-5" strokeWidth={2} />
         </div>
