@@ -233,11 +233,22 @@ export function Reports({ students, rooms = [], loading = false }: ReportsProps)
         },
         didDrawPage: (data) => {
           // Formal Verification Footer
-          const str = `System-generated secure audit document | Certified by Exora Board | Page ${data.pageNumber} of ${doc.getNumberOfPages()}`;
+          const line1 = 'This is a system-generated secure audit document. Authorized by Exora Proctoring Engine.';
+          const line2 = 'Aarga Foundation & Aarga Private Limited';
+          const pageStr = `Page ${data.pageNumber} of ${doc.getNumberOfPages()}`;
+
           doc.setFontSize(7.5);
+          doc.setFont('helvetica', 'bold');
+          doc.setTextColor(71, 85, 105);
+
+          // Line 1 & Page Number
+          doc.text(line1, 14, 283);
+          doc.text(pageStr, 196, 283, { align: 'right' });
+
+          // Line 2
           doc.setFont('helvetica', 'normal');
-          doc.setTextColor(148, 163, 184);
-          doc.text(str, 14, 287);
+          doc.setTextColor(100, 116, 139);
+          doc.text(line2, 14, 288);
         },
       });
 
