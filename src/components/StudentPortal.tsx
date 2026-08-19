@@ -796,9 +796,9 @@ export function StudentPortal({
           >
             <div className="pointer-events-none fixed inset-0 bg-grid-light dark:bg-grid-dark bg-grid opacity-20" />
 
-            <div className="relative flex flex-1 flex-col my-auto w-full max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 lg:grid lg:grid-cols-12 lg:gap-8 items-center">
+            <div className="relative flex flex-1 flex-col my-auto w-full max-w-[1400px] mx-auto p-4 sm:p-6 lg:p-10 lg:grid lg:grid-cols-12 lg:gap-10 items-center">
               {/* Left / Hero Security Panel */}
-              <div className="relative flex flex-col justify-center p-6 sm:p-8 lg:col-span-6 lg:p-10 xl:col-span-6 w-full">
+              <div className="relative flex flex-col justify-center p-4 sm:p-6 lg:col-span-5 lg:p-8 w-full">
                 <div className="flex items-center gap-3">
                   <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-900 text-white shadow-subtle dark:bg-white dark:text-slate-950">
                     <ShieldCheck className="h-6 w-6" strokeWidth={2} />
@@ -856,8 +856,8 @@ export function StudentPortal({
               </div>
 
               {/* Right / Interactive Verification & Launch Workspace */}
-              <div className="relative flex flex-col justify-center p-6 sm:p-8 lg:col-span-6 lg:p-10 xl:col-span-6 w-full">
-                <div className="panel-card rounded-3xl border border-slate-200/80 bg-white p-6 sm:p-8 space-y-6 shadow-xl dark:border-zinc-800/90 dark:bg-zinc-950">
+              <div className="relative flex flex-col justify-center p-4 sm:p-6 lg:col-span-7 lg:p-8 w-full">
+                <div className="panel-card rounded-3xl border border-slate-200/80 bg-white p-6 sm:p-8 space-y-6 shadow-xl dark:border-zinc-800/90 dark:bg-zinc-950 w-full">
                   {/* Candidate Profile Details Card */}
                   <div className="space-y-4">
                     <div className="flex items-center justify-between border-b border-slate-100 dark:border-zinc-800/80 pb-4">
@@ -876,21 +876,21 @@ export function StudentPortal({
                     </div>
 
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 text-xs">
-                      <div className="rounded-xl border border-slate-200/80 bg-slate-50/70 p-3.5 dark:border-zinc-800/80 dark:bg-zinc-900/60">
+                      <div className="rounded-xl border border-slate-200/80 bg-slate-50/70 p-4 dark:border-zinc-800/80 dark:bg-zinc-900/60">
                         <span className="text-slate-500 dark:text-slate-400">Assigned Unit Test</span>
-                        <p className="font-display mt-0.5 font-bold text-slate-900 dark:text-white text-sm">{activeRoom.title}</p>
+                        <p className="font-display mt-0.5 font-bold text-slate-900 dark:text-white text-base">{activeRoom.title}</p>
                       </div>
-                      <div className="rounded-xl border border-slate-200/80 bg-slate-50/70 p-3.5 dark:border-zinc-800/80 dark:bg-zinc-900/60">
+                      <div className="rounded-xl border border-slate-200/80 bg-slate-50/70 p-4 dark:border-zinc-800/80 dark:bg-zinc-900/60">
                         <span className="text-slate-500 dark:text-slate-400">Target Department &amp; Roster</span>
-                        <p className="font-display mt-0.5 font-bold text-slate-900 dark:text-white text-sm">{activeRoom.department}</p>
-                        <p className="text-[11px] text-slate-500 dark:text-slate-400">Year {activeRoom.year} • Sem {activeRoom.semester}</p>
+                        <p className="font-display mt-0.5 font-bold text-slate-900 dark:text-white text-base">{activeRoom.department}</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Year {activeRoom.year} • Sem {activeRoom.semester}</p>
                       </div>
                     </div>
                   </div>
 
                   {/* Launch Actions Container */}
-                  <div className="rounded-2xl border border-amber-200/80 bg-amber-50/70 p-5 space-y-4 dark:border-amber-500/30 dark:bg-amber-500/5">
-                    <div className="flex items-start gap-3">
+                  <div className="rounded-2xl border border-amber-200/80 bg-amber-50/70 p-6 space-y-5 dark:border-amber-500/30 dark:bg-amber-500/5">
+                    <div className="flex items-start gap-3.5">
                       <ShieldCheck className="h-6 w-6 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
                       <div>
                         <h4 className="font-display text-base font-bold text-amber-950 dark:text-amber-200">
@@ -902,14 +902,14 @@ export function StudentPortal({
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 pt-2">
+                    <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 pt-2">
                       <a
                         href="https://safeexambrowser.org/download_en.html"
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center justify-center gap-2 rounded-xl border border-amber-300 bg-white px-4 py-3.5 text-xs font-semibold text-slate-800 transition hover:bg-slate-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white dark:hover:bg-zinc-800 shadow-sm"
+                        className="flex items-center justify-center gap-2.5 rounded-xl border border-amber-300 bg-white px-4 py-4 text-xs font-semibold text-slate-800 transition hover:bg-slate-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white dark:hover:bg-zinc-800 shadow-sm"
                       >
-                        <Download className="h-4 w-4" />
+                        <Download className="h-4 w-4 shrink-0" />
                         <span>1. Download SEB Client</span>
                       </a>
 
@@ -919,9 +919,9 @@ export function StudentPortal({
                           const directUrl = `${proto}//${window.location.host}${window.location.pathname}?mode=student&room=${activeRoom.room_code}`;
                           window.location.href = directUrl;
                         }}
-                        className="flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3.5 text-xs font-bold uppercase tracking-wider text-white shadow-elevated transition hover:bg-slate-800 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200 active:scale-[0.98]"
+                        className="flex items-center justify-center gap-2.5 rounded-xl bg-slate-900 px-4 py-4 text-xs font-bold uppercase tracking-wider text-white shadow-elevated transition hover:bg-slate-800 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200 active:scale-[0.98]"
                       >
-                        <Maximize2 className="h-4 w-4 text-white dark:text-slate-950" />
+                        <Maximize2 className="h-4 w-4 text-white dark:text-slate-950 shrink-0" />
                         <span>2. Launch Safe Exam Browser</span>
                       </button>
                     </div>
