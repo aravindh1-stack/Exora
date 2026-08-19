@@ -125,7 +125,7 @@ export function AdminLogin({ onSuccess, onBackToLanding }: AdminLoginProps) {
           <div className="relative z-10 border-t border-zinc-800/80 pt-6 text-xs text-zinc-500">
             <div className="flex items-center gap-2">
               <Building2 className="h-4 w-4 text-zinc-400" />
-              <span>SSCET Administrative Console • Exora Core</span>
+              <span>Administrative Console • Exora Core</span>
             </div>
           </div>
         </div>

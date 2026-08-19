@@ -27,10 +27,37 @@ interface ReportsProps {
   loading?: boolean;
 }
 
+// Convert local logo image to base64 DataURL for direct PDF embedding
+const getLogoBase64 = (): Promise<string | null> => {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'Anonymous';
+    img.src = '/aarga-logo.png';
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0);
+          resolve(canvas.toDataURL('image/png'));
+        } else {
+          resolve(null);
+        }
+      } catch (e) {
+        resolve(null);
+      }
+    };
+    img.onerror = () => resolve(null);
+  });
+};
+
 export function Reports({ students, rooms = [], loading = false }: ReportsProps) {
   const [search, setSearch] = useState('');
   const [selectedDept, setSelectedDept] = useState<string>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
+  const [pdfGenerating, setPdfGenerating] = useState(false);
 
   // Derive unique department list from students and rooms
   const departments = useMemo(() => {
@@ -84,152 +111,144 @@ export function Reports({ students, rooms = [], loading = false }: ReportsProps)
     };
   }, [filteredStudents]);
 
-  // Download Official Institutional A4 PDF Report Document Handler
-  const handleDownloadPDFReport = () => {
-    if (filteredStudents.length === 0) return;
+  // Direct A4 PDF File Downloader (Clean White Theme, Black & White Professional Styling, No Logo Box)
+  const handleDownloadPDFReport = async () => {
+    if (filteredStudents.length === 0 || pdfGenerating) return;
 
-    const doc = new jsPDF({
-      orientation: 'portrait',
-      unit: 'mm',
-      format: 'a4',
-    });
+    setPdfGenerating(true);
+    try {
+      const logoBase64 = await getLogoBase64();
 
-    const reportDate = new Date().toLocaleDateString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    });
+      const doc = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4',
+      });
 
-    const deptTitle = selectedDept === 'all' ? 'All Academic Departments' : `${selectedDept} Department`;
+      const reportDate = new Date().toLocaleDateString('en-US', {
+        weekday: 'short',
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+      });
 
-    // 1. Institutional Letterhead Header
-    doc.setFillColor(15, 23, 42); // slate-900
-    doc.rect(0, 0, 210, 36, 'F');
+      const deptTitle = selectedDept === 'all' ? 'All Academic Departments' : `${selectedDept} Department`;
 
-    // Branding Title
-    doc.setTextColor(255, 255, 255);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(16);
-    doc.text('EXORA PROCTORING ENGINE', 14, 15);
+      // 1. Institutional Top Letterhead (Pure White Background, Black Text)
+      doc.setTextColor(15, 23, 42); // Crisp Black
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(16);
+      doc.text('Exora Examination Portal', 14, 16);
 
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(203, 213, 225);
-    doc.text('SSCET INSTITUTIONAL EXAMINATION BOARD • ACADEMIC AUDIT CONTROL', 14, 21);
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(71, 85, 105);
+      doc.text('Institutional Examination Board • Academic Audit Control', 14, 22);
 
-    doc.setFontSize(11);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(255, 255, 255);
-    doc.text('OFFICIAL ACADEMIC EXAMINATION AUDIT REPORT', 14, 29);
+      doc.setFontSize(8);
+      doc.setTextColor(100, 116, 139);
+      doc.text(`Generated: ${reportDate}  |  Security: AES-256 Encrypted Audit Stream`, 14, 28);
 
-    // 2. Official Metadata Grid Box (A4 Document Frame)
-    doc.setFillColor(248, 250, 252);
-    doc.setDrawColor(226, 232, 240);
-    doc.roundedRect(14, 42, 182, 26, 3, 3, 'FD');
-
-    doc.setTextColor(100, 116, 139);
-    doc.setFontSize(7.5);
-    doc.setFont('helvetica', 'bold');
-
-    doc.text('DOCUMENT REF NO', 18, 49);
-    doc.text('DATE GENERATED', 70, 49);
-    doc.text('DEPARTMENT SCOPE', 120, 49);
-    doc.text('SECURITY PROTOCOL', 165, 49);
-
-    doc.setTextColor(15, 23, 42);
-    doc.setFontSize(9.5);
-    doc.text(`EXORA-REP-${Date.now().toString().slice(-6)}`, 18, 56);
-    doc.text(reportDate, 70, 56);
-    doc.text(deptTitle.toUpperCase(), 120, 56);
-
-    doc.setTextColor(5, 150, 105);
-    doc.text('AES-256 ENCRYPTED', 165, 56);
-
-    // KPI Sub-bar
-    doc.setFontSize(8);
-    doc.setTextColor(100, 116, 139);
-    doc.setFont('helvetica', 'bold');
-    doc.text(`ROSTER: ${stats.total} CANDIDATES   |   AVG SCORE: ${stats.avgScore}   |   COMPLETED: ${stats.completedCount}   |   INCIDENTS: ${stats.flaggedCount}`, 18, 63);
-
-    // 3. Structured Clean Data Table
-    const tableData = filteredStudents.map((s, idx) => [
-      idx + 1,
-      s.register_no,
-      s.name,
-      `${s.department}\n(Year ${s.year} • Sem ${s.semester})`,
-      s.status.toUpperCase(),
-      s.status === 'completed' ? `${s.score}%` : '—',
-      s.status === 'completed' ? (s.score >= 80 ? 'DISTINCTION' : s.score >= 50 ? 'PASSED' : 'NEEDS REVIEW') : 'PENDING',
-    ]);
-
-    autoTable(doc, {
-      startY: 74,
-      head: [['#', 'REGISTER NO', 'CANDIDATE NAME', 'DEPARTMENT & ROSTER', 'STATUS', 'SCORE', 'PERFORMANCE RATING']],
-      body: tableData,
-      theme: 'grid',
-      headStyles: {
-        fillColor: [15, 23, 42],
-        textColor: [255, 255, 255],
-        fontSize: 8,
-        fontStyle: 'bold',
-        halign: 'left',
-      },
-      bodyStyles: {
-        fontSize: 8,
-        textColor: [30, 41, 59],
-      },
-      columnStyles: {
-        0: { cellWidth: 10 },
-        1: { cellWidth: 30, fontStyle: 'bold' },
-        2: { cellWidth: 44, fontStyle: 'bold' },
-        3: { cellWidth: 42 },
-        4: { cellWidth: 22, fontStyle: 'bold' },
-        5: { cellWidth: 16, fontStyle: 'bold', halign: 'right' },
-        6: { cellWidth: 28, fontStyle: 'bold' },
-      },
-      styles: {
-        cellPadding: 3.5,
-      },
-      didParseCell: (data) => {
-        if (data.section === 'body') {
-          if (data.column.index === 4) {
-            const val = data.cell.text[0];
-            if (val === 'COMPLETED') data.cell.styles.textColor = [5, 150, 105];
-            if (val === 'FLAGGED') data.cell.styles.textColor = [225, 29, 72];
-          }
-          if (data.column.index === 6) {
-            const val = data.cell.text[0];
-            if (val === 'DISTINCTION') data.cell.styles.textColor = [4, 120, 87];
-            if (val === 'PASSED') data.cell.styles.textColor = [30, 64, 175];
-          }
+      // Render Logo Cleanly on Top Right without any background box or border ("logo ku bg venam")
+      if (logoBase64) {
+        try {
+          doc.addImage(logoBase64, 'PNG', 165, 8, 30, 22);
+        } catch (e) {
+          console.warn('PDF logo render error:', e);
         }
-      },
-      didDrawPage: (data) => {
-        // Formal Verification Footer & Page Numbering
-        const str = `System-generated secure audit document, AES-256 Encrypted | Certified by Exora Institutional Examination Board | Page ${data.pageNumber} of ${doc.getNumberOfPages()}`;
-        doc.setFontSize(7.5);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(148, 163, 184); // slate-400
-        doc.text(str, 14, 287);
-      },
-    });
-
-    const fileName = `Exora_Academic_Report_${selectedDept.replace(/\s+/g, '_')}.pdf`;
-
-    const img = new Image();
-    img.src = '/aarga-logo.png';
-    img.onload = () => {
-      try {
-        doc.addImage(img, 'PNG', 165, 8, 28, 20);
-      } catch (e) {
-        console.warn('Logo render failed:', e);
       }
+
+      // Thin Elegant Separator Line
+      doc.setDrawColor(226, 232, 240);
+      doc.setLineWidth(0.4);
+      doc.line(14, 33, 196, 33);
+
+      // 2. Official Metadata Grid Box (Clean White Box with Thin Slate Border)
+      doc.setFillColor(255, 255, 255);
+      doc.setDrawColor(203, 213, 225);
+      doc.roundedRect(14, 37, 182, 22, 2, 2, 'FD');
+
+      doc.setTextColor(100, 116, 139);
+      doc.setFontSize(7.5);
+      doc.setFont('helvetica', 'bold');
+
+      doc.text('DOCUMENT REF NO', 18, 43);
+      doc.text('DATE GENERATED', 70, 43);
+      doc.text('DEPARTMENT SCOPE', 120, 43);
+      doc.text('AUDIT STATUS', 165, 43);
+
+      doc.setTextColor(15, 23, 42);
+      doc.setFontSize(9);
+      doc.text(`EXORA-REP-${Date.now().toString().slice(-6)}`, 18, 51);
+      doc.text(reportDate, 70, 51);
+      doc.text(deptTitle.toUpperCase(), 120, 51);
+      doc.text('VERIFIED', 165, 51);
+
+      // KPI Summary Sub-bar
+      doc.setFillColor(248, 250, 252);
+      doc.roundedRect(14, 63, 182, 9, 2, 2, 'FD');
+      doc.setFontSize(8);
+      doc.setTextColor(15, 23, 42);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`ROSTER: ${stats.total} CANDIDATES   |   AVG SCORE: ${stats.avgScore}   |   COMPLETED: ${stats.completedCount} EXAMS   |   INCIDENTS: ${stats.flaggedCount} FLAGS`, 18, 69);
+
+      // 3. Monochrome Professional Data Table starting at Y=76
+      const tableData = filteredStudents.map((s, idx) => [
+        idx + 1,
+        s.register_no,
+        s.name,
+        `${s.department}\n(Year ${s.year} • Sem ${s.semester})`,
+        s.status.toUpperCase(),
+        s.status === 'completed' ? `${s.score}%` : '—',
+      ]);
+
+      autoTable(doc, {
+        startY: 76,
+        head: [['#', 'REGISTER NO', 'CANDIDATE NAME', 'DEPARTMENT & ROSTER', 'STATUS', 'SCORE (%)']],
+        body: tableData,
+        theme: 'grid',
+        headStyles: {
+          fillColor: [15, 23, 42],
+          textColor: [255, 255, 255],
+          fontSize: 8,
+          fontStyle: 'bold',
+          halign: 'left',
+        },
+        bodyStyles: {
+          fontSize: 8,
+          textColor: [15, 23, 42],
+        },
+        columnStyles: {
+          0: { cellWidth: 10 },
+          1: { cellWidth: 32, fontStyle: 'bold' },
+          2: { cellWidth: 48, fontStyle: 'bold' },
+          3: { cellWidth: 46 },
+          4: { cellWidth: 26, fontStyle: 'bold' },
+          5: { cellWidth: 20, fontStyle: 'bold', halign: 'right' },
+        },
+        styles: {
+          cellPadding: 3.5,
+          lineColor: [226, 232, 240],
+          lineWidth: 0.2,
+        },
+        didDrawPage: (data) => {
+          // Formal Verification Footer
+          const str = `System-generated secure audit document | Certified by Exora Board | Page ${data.pageNumber} of ${doc.getNumberOfPages()}`;
+          doc.setFontSize(7.5);
+          doc.setFont('helvetica', 'normal');
+          doc.setTextColor(148, 163, 184);
+          doc.text(str, 14, 287);
+        },
+      });
+
+      // Save PDF directly to browser downloads
+      const fileName = `Exora_Academic_Report_${selectedDept.replace(/\s+/g, '_')}.pdf`;
       doc.save(fileName);
-    };
-    img.onerror = () => {
-      doc.save(fileName);
-    };
+    } catch (err) {
+      console.error('Failed to generate PDF document:', err);
+    } finally {
+      setPdfGenerating(false);
+    }
   };
 
   // CSV Export Handler
@@ -259,7 +278,7 @@ export function Reports({ students, rooms = [], loading = false }: ReportsProps)
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 font-sans">
       {/* Top Banner Header */}
       <motion.div
         initial={{ opacity: 0, y: 6 }}
@@ -292,11 +311,11 @@ export function Reports({ students, rooms = [], loading = false }: ReportsProps)
 
           <button
             onClick={handleDownloadPDFReport}
-            disabled={filteredStudents.length === 0}
+            disabled={filteredStudents.length === 0 || pdfGenerating}
             className="flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white transition hover:bg-slate-800 active:scale-[0.98] disabled:opacity-50 dark:bg-zinc-100 dark:text-black dark:hover:bg-zinc-200 shadow-sm cursor-pointer"
           >
             <FileText className="h-4 w-4 text-emerald-400 dark:text-emerald-600" />
-            <span>Download Official PDF Document</span>
+            <span>{pdfGenerating ? 'Generating PDF...' : 'Download Official PDF Document'}</span>
           </button>
         </div>
       </motion.div>

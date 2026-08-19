@@ -171,7 +171,7 @@ export function StudentPortal({
       id: 'student-default',
       register_no: 'E24EC025',
       name: 'Candidate Student',
-      email: 'student@sscet.edu',
+      email: 'student@quizportal.edu',
       department: 'Electronics & Communication',
       year: 3,
       semester: 5,
@@ -358,7 +358,7 @@ export function StudentPortal({
         id: `auto-student-${normReg}`,
         register_no: urlReg.toUpperCase(),
         name: `Candidate ${urlReg.toUpperCase()}`,
-        email: `${urlReg.toLowerCase()}@sscet.edu`,
+        email: `${urlReg.toLowerCase()}@quizportal.edu`,
         department: roomMatch.department,
         year: Number(roomMatch.year) || 3,
         semester: Number(roomMatch.semester) || 5,
@@ -464,7 +464,7 @@ export function StudentPortal({
         id: `auto-student-${normReg}`,
         register_no: reg.toUpperCase(),
         name: `Candidate ${reg.toUpperCase()}`,
-        email: `${reg.toLowerCase()}@sscet.edu`,
+        email: `${reg.toLowerCase()}@quizportal.edu`,
         department: roomMatch.department,
         year: Number(roomMatch.year) || 3,
         semester: Number(roomMatch.semester) || 5,
@@ -823,7 +823,7 @@ export function StudentPortal({
                       Exora Proctoring Engine
                     </h1>
                     <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                      SSCET Examination Protocol
+                      Institutional Examination Protocol
                     </p>
                   </div>
                 </div>

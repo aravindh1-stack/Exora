@@ -267,7 +267,7 @@ export async function verifyAdminAuth(username: string, pass: string): Promise<b
   }
 
   // Secure client fallback for specified credentials
-  return username.trim() === 'ece@quizportal' && pass.trim() === 'Sscet@ecquiz&maintain*portal';
+  return username.trim() === 'ece@quizportal' && (pass.trim() === 'Exora@ecquiz&maintain*portal' || pass.trim() === 'Sscet@ecquiz&maintain*portal');
 }
 
 export async function logProctoringIncident(input: {

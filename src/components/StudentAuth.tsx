@@ -110,7 +110,7 @@ export function StudentAuth({ onAuthSuccess, existingStudents = [], onBackToLand
                   Exora
                 </span>
                 <span className="ml-2.5 rounded-md border border-zinc-800 bg-zinc-900/80 px-2 py-0.5 text-[10px] font-semibold tracking-wider text-zinc-400">
-                  SSCET Enterprise
+                  Portal Enterprise
                 </span>
               </div>
             </div>
@@ -127,7 +127,7 @@ export function StudentAuth({ onAuthSuccess, existingStudents = [], onBackToLand
               Frictionless Student Portal &amp; Live Evaluation
             </h1>
             <p className="mt-4 text-sm leading-relaxed text-zinc-400">
-              Direct-to-dashboard authentication for Sri Shanmugha College of Engineering &amp; Technology (SSCET). Sign in with your SIN NO to access live departmental examinations.
+              Direct-to-dashboard authentication. Sign in with your SIN NO to access live departmental examinations.
             </p>
 
             <div className="mt-8 space-y-4">
@@ -173,7 +173,7 @@ export function StudentAuth({ onAuthSuccess, existingStudents = [], onBackToLand
                 <ShieldCheck className="h-4.5 w-4.5" />
               </div>
               <span className="font-display font-bold text-brand-950 dark:text-white">
-                Exora SSCET
+                Exora Portal
               </span>
             </div>
 
