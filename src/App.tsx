@@ -11,6 +11,7 @@ import { StudentPortal } from '@/components/StudentPortal';
 import { LandingPage } from '@/components/LandingPage';
 import { StudentAuth } from '@/components/StudentAuth';
 import { AdminLogin } from '@/components/AdminLogin';
+import { Reports } from '@/components/Reports';
 
 import { PortalErrorBoundary } from '@/components/PortalErrorBoundary';
 import { fetchQuestions, fetchStudentsWithSessions, fetchExamRooms } from '@/lib/queries';
@@ -297,6 +298,13 @@ function App() {
                     students={students}
                     loading={loadingStudents}
                     onReload={loadStudents}
+                  />
+                )}
+                {section === 'reports' && (
+                  <Reports
+                    students={students}
+                    rooms={rooms}
+                    loading={loadingStudents || loadingRooms}
                   />
                 )}
               </motion.div>
