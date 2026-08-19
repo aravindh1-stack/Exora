@@ -5,19 +5,13 @@ import {
   Filter,
   Download,
   FileText,
-  BarChart3,
   Award,
   CheckCircle2,
-  Clock,
   Flag,
   UserCheck,
-  Building,
-  GraduationCap,
   Sparkles,
-  ShieldCheck,
 } from 'lucide-react';
 import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
 import type { StudentWithSession, ExamRoom } from '@/lib/types';
 import { Skeleton } from './ui';
 
@@ -26,32 +20,6 @@ interface ReportsProps {
   rooms?: ExamRoom[];
   loading?: boolean;
 }
-
-// Convert local logo image to base64 DataURL for direct PDF embedding
-const getLogoBase64 = (): Promise<string | null> => {
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.crossOrigin = 'Anonymous';
-    img.src = '/aarga-logo.png';
-    img.onload = () => {
-      try {
-        const canvas = document.createElement('canvas');
-        canvas.width = img.naturalWidth;
-        canvas.height = img.naturalHeight;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.drawImage(img, 0, 0);
-          resolve(canvas.toDataURL('image/png'));
-        } else {
-          resolve(null);
-        }
-      } catch (e) {
-        resolve(null);
-      }
-    };
-    img.onerror = () => resolve(null);
-  });
-};
 
 export function Reports({ students, rooms = [], loading = false }: ReportsProps) {
   const [search, setSearch] = useState('');
@@ -111,20 +79,12 @@ export function Reports({ students, rooms = [], loading = false }: ReportsProps)
     };
   }, [filteredStudents]);
 
-  // Direct A4 PDF File Downloader (Clean White Theme, Black & White Professional Styling, No Logo Box)
+  // Direct PDF File Downloader with Google Font Urbanist ONLY
   const handleDownloadPDFReport = async () => {
     if (filteredStudents.length === 0 || pdfGenerating) return;
 
     setPdfGenerating(true);
     try {
-      const logoBase64 = await getLogoBase64();
-
-      const doc = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4',
-      });
-
       const reportDate = new Date().toLocaleDateString('en-US', {
         weekday: 'short',
         year: 'numeric',
@@ -134,127 +94,110 @@ export function Reports({ students, rooms = [], loading = false }: ReportsProps)
 
       const deptTitle = selectedDept === 'all' ? 'All Academic Departments' : `${selectedDept} Department`;
 
-      // 1. Institutional Top Letterhead (Pure White Background, Black Text)
-      doc.setTextColor(15, 23, 42); // Crisp Black
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(16);
-      doc.text('Exora Examination Portal', 14, 16);
+      // Create a temporary hidden container strictly styled with Urbanist font
+      const container = document.createElement('div');
+      container.style.position = 'fixed';
+      container.style.left = '-9999px';
+      container.style.top = '-9999px';
+      container.style.width = '794px'; // Standard A4 width at 96 DPI
+      container.style.padding = '32px 40px';
+      container.style.backgroundColor = '#ffffff';
+      container.style.fontFamily = "'Urbanist', -apple-system, sans-serif";
+      container.style.color = '#0f172a';
 
-      doc.setFontSize(9);
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(71, 85, 105);
-      doc.text('Institutional Examination Board • Academic Audit Control', 14, 22);
+      container.innerHTML = `
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Urbanist:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
+        <style>
+          * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Urbanist', sans-serif !important; }
+        </style>
+        
+        <!-- Header -->
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; font-family: 'Urbanist', sans-serif !important;">
+          <div style="display: flex; align-items: center; gap: 16px;">
+            <img src="/aarga-logo.png" style="height: 52px; width: auto; object-fit: contain;" />
+            <div>
+              <h1 style="font-size: 22px; font-weight: 800; color: #0f172a; line-height: 1.1; font-family: 'Urbanist', sans-serif !important;">Exora Examination Portal</h1>
+              <p style="font-size: 13px; font-weight: 600; color: #475569; margin-top: 3px; font-family: 'Urbanist', sans-serif !important;">Aarga Foundation & Aarga Private Limited</p>
+            </div>
+          </div>
+        </div>
 
-      doc.setFontSize(8);
-      doc.setTextColor(100, 116, 139);
-      doc.text(`Generated: ${reportDate}  |  Security: AES-256 Encrypted Audit Stream`, 14, 28);
+        <!-- Document Info -->
+        <div style="margin-bottom: 20px; font-family: 'Urbanist', sans-serif !important;">
+          <h2 style="font-size: 14px; font-weight: 800; color: #0f172a; letter-spacing: 0.5px; text-transform: uppercase; font-family: 'Urbanist', sans-serif !important;">OFFICIAL ACADEMIC EXAMINATION AUDIT REPORT</h2>
+          <p style="font-size: 11px; font-weight: 600; color: #64748b; margin-top: 4px; font-family: 'Urbanist', sans-serif !important;">
+            Department: ${deptTitle} &nbsp;|&nbsp; Date: ${reportDate} &nbsp;|&nbsp; Ref: EXORA-REP-${Date.now().toString().slice(-6)}
+          </p>
+        </div>
 
-      // Render Logo Cleanly on Top Right without any background box or border ("logo ku bg venam")
-      if (logoBase64) {
-        try {
-          doc.addImage(logoBase64, 'PNG', 165, 8, 30, 22);
-        } catch (e) {
-          console.warn('PDF logo render error:', e);
-        }
-      }
+        <hr style="border: none; border-top: 1.5px solid #cbd5e1; margin-bottom: 24px;" />
 
-      // Thin Elegant Separator Line
-      doc.setDrawColor(226, 232, 240);
-      doc.setLineWidth(0.4);
-      doc.line(14, 33, 196, 33);
+        <!-- Student Roster Table -->
+        <table style="width: 100%; border-collapse: collapse; font-size: 12px; font-family: 'Urbanist', sans-serif !important;">
+          <thead>
+            <tr style="background-color: #0f172a; color: #ffffff;">
+              <th style="padding: 10px 12px; font-weight: 800; text-align: left; border: 1px solid #0f172a; font-size: 11px; font-family: 'Urbanist', sans-serif !important;">#</th>
+              <th style="padding: 10px 12px; font-weight: 800; text-align: left; border: 1px solid #0f172a; font-size: 11px; font-family: 'Urbanist', sans-serif !important;">REGISTER NO</th>
+              <th style="padding: 10px 12px; font-weight: 800; text-align: left; border: 1px solid #0f172a; font-size: 11px; font-family: 'Urbanist', sans-serif !important;">STUDENT NAME</th>
+              <th style="padding: 10px 12px; font-weight: 800; text-align: left; border: 1px solid #0f172a; font-size: 11px; font-family: 'Urbanist', sans-serif !important;">DEPARTMENT & ROSTER</th>
+              <th style="padding: 10px 12px; font-weight: 800; text-align: left; border: 1px solid #0f172a; font-size: 11px; font-family: 'Urbanist', sans-serif !important;">STATUS</th>
+              <th style="padding: 10px 12px; font-weight: 800; text-align: right; border: 1px solid #0f172a; font-size: 11px; font-family: 'Urbanist', sans-serif !important;">SCORE (%)</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${filteredStudents
+              .map(
+                (s, i) => `
+              <tr style="background-color: ${i % 2 === 0 ? '#ffffff' : '#f8fafc'};">
+                <td style="padding: 10px 12px; border: 1px solid #cbd5e1; font-weight: 600; font-family: 'Urbanist', sans-serif !important;">${i + 1}</td>
+                <td style="padding: 10px 12px; border: 1px solid #cbd5e1; font-weight: 800; color: #0f172a; font-family: 'Urbanist', sans-serif !important;">${s.register_no}</td>
+                <td style="padding: 10px 12px; border: 1px solid #cbd5e1; font-weight: 800; color: #0f172a; font-family: 'Urbanist', sans-serif !important;">${s.name}</td>
+                <td style="padding: 10px 12px; border: 1px solid #cbd5e1; font-weight: 600; color: #334155; font-family: 'Urbanist', sans-serif !important;">${s.department} (Year ${s.year} • Sem ${s.semester})</td>
+                <td style="padding: 10px 12px; border: 1px solid #cbd5e1; font-weight: 800; color: ${s.status === 'completed' ? '#059669' : '#e11d48'}; font-family: 'Urbanist', sans-serif !important;">${s.status.toUpperCase()}</td>
+                <td style="padding: 10px 12px; border: 1px solid #cbd5e1; font-weight: 800; text-align: right; color: #0f172a; font-family: 'Urbanist', sans-serif !important;">${s.status === 'completed' ? `${s.score}%` : '—'}</td>
+              </tr>
+            `,
+              )
+              .join('')}
+          </tbody>
+        </table>
 
-      // 2. Official Metadata Grid Box (Clean White Box with Thin Slate Border)
-      doc.setFillColor(255, 255, 255);
-      doc.setDrawColor(203, 213, 225);
-      doc.roundedRect(14, 37, 182, 22, 2, 2, 'FD');
+        <!-- Footer -->
+        <div style="margin-top: 40px; padding-top: 16px; border-top: 1px solid #cbd5e1; display: flex; align-items: center; justify-content: space-between; font-size: 10px; font-weight: 600; color: #64748b; font-family: 'Urbanist', sans-serif !important;">
+          <div>
+            <p style="font-family: 'Urbanist', sans-serif !important;">This is a system-generated secure audit document. Authorized by Exora Proctoring Engine.</p>
+            <p style="margin-top: 2px; font-family: 'Urbanist', sans-serif !important;">Aarga Foundation & Aarga Private Limited</p>
+          </div>
+          <div style="font-family: 'Urbanist', sans-serif !important;">Page 1 of 1</div>
+        </div>
+      `;
 
-      doc.setTextColor(100, 116, 139);
-      doc.setFontSize(7.5);
-      doc.setFont('helvetica', 'bold');
+      document.body.appendChild(container);
 
-      doc.text('DOCUMENT REF NO', 18, 43);
-      doc.text('DATE GENERATED', 70, 43);
-      doc.text('DEPARTMENT SCOPE', 120, 43);
-      doc.text('AUDIT STATUS', 165, 43);
+      // Wait 400ms to ensure Google Font Urbanist is fully downloaded and applied
+      await new Promise((r) => setTimeout(r, 400));
 
-      doc.setTextColor(15, 23, 42);
-      doc.setFontSize(9);
-      doc.text(`EXORA-REP-${Date.now().toString().slice(-6)}`, 18, 51);
-      doc.text(reportDate, 70, 51);
-      doc.text(deptTitle.toUpperCase(), 120, 51);
-      doc.text('VERIFIED', 165, 51);
-
-      // KPI Summary Sub-bar
-      doc.setFillColor(248, 250, 252);
-      doc.roundedRect(14, 63, 182, 9, 2, 2, 'FD');
-      doc.setFontSize(8);
-      doc.setTextColor(15, 23, 42);
-      doc.setFont('helvetica', 'bold');
-      doc.text(`ROSTER: ${stats.total} CANDIDATES   |   AVG SCORE: ${stats.avgScore}   |   COMPLETED: ${stats.completedCount} EXAMS   |   INCIDENTS: ${stats.flaggedCount} FLAGS`, 18, 69);
-
-      // 3. Monochrome Professional Data Table starting at Y=76
-      const tableData = filteredStudents.map((s, idx) => [
-        idx + 1,
-        s.register_no,
-        s.name,
-        `${s.department}\n(Year ${s.year} • Sem ${s.semester})`,
-        s.status.toUpperCase(),
-        s.status === 'completed' ? `${s.score}%` : '—',
-      ]);
-
-      autoTable(doc, {
-        startY: 76,
-        head: [['#', 'REGISTER NO', 'CANDIDATE NAME', 'DEPARTMENT & ROSTER', 'STATUS', 'SCORE (%)']],
-        body: tableData,
-        theme: 'grid',
-        headStyles: {
-          fillColor: [15, 23, 42],
-          textColor: [255, 255, 255],
-          fontSize: 8,
-          fontStyle: 'bold',
-          halign: 'left',
-        },
-        bodyStyles: {
-          fontSize: 8,
-          textColor: [15, 23, 42],
-        },
-        columnStyles: {
-          0: { cellWidth: 10 },
-          1: { cellWidth: 32, fontStyle: 'bold' },
-          2: { cellWidth: 48, fontStyle: 'bold' },
-          3: { cellWidth: 46 },
-          4: { cellWidth: 26, fontStyle: 'bold' },
-          5: { cellWidth: 20, fontStyle: 'bold', halign: 'right' },
-        },
-        styles: {
-          cellPadding: 3.5,
-          lineColor: [226, 232, 240],
-          lineWidth: 0.2,
-        },
-        didDrawPage: (data) => {
-          // Formal Verification Footer
-          const line1 = 'This is a system-generated secure audit document. Authorized by Exora Proctoring Engine.';
-          const line2 = 'Aarga Foundation & Aarga Private Limited';
-          const pageStr = `Page ${data.pageNumber} of ${doc.getNumberOfPages()}`;
-
-          doc.setFontSize(7.5);
-          doc.setFont('helvetica', 'bold');
-          doc.setTextColor(71, 85, 105);
-
-          // Line 1 & Page Number
-          doc.text(line1, 14, 283);
-          doc.text(pageStr, 196, 283, { align: 'right' });
-
-          // Line 2
-          doc.setFont('helvetica', 'normal');
-          doc.setTextColor(100, 116, 139);
-          doc.text(line2, 14, 288);
-        },
+      const doc = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4',
       });
 
-      // Save PDF directly to browser downloads
-      const fileName = `Exora_Academic_Report_${selectedDept.replace(/\s+/g, '_')}.pdf`;
-      doc.save(fileName);
+      await doc.html(container, {
+        callback: (pdf) => {
+          const fileName = `Exora_Academic_Report_${selectedDept.replace(/\s+/g, '_')}.pdf`;
+          pdf.save(fileName);
+          try {
+            document.body.removeChild(container);
+          } catch (e) {}
+        },
+        margin: [10, 10, 10, 10],
+        autoPaging: 'text',
+        width: 190,
+        windowWidth: 794,
+      });
     } catch (err) {
       console.error('Failed to generate PDF document:', err);
     } finally {
@@ -326,7 +269,7 @@ export function Reports({ students, rooms = [], loading = false }: ReportsProps)
             className="flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white transition hover:bg-slate-800 active:scale-[0.98] disabled:opacity-50 dark:bg-zinc-100 dark:text-black dark:hover:bg-zinc-200 shadow-sm cursor-pointer"
           >
             <FileText className="h-4 w-4 text-emerald-400 dark:text-emerald-600" />
-            <span>{pdfGenerating ? 'Generating PDF...' : 'Download Official PDF Document'}</span>
+            <span>{pdfGenerating ? 'Downloading PDF...' : 'Download Official PDF Document'}</span>
           </button>
         </div>
       </motion.div>
