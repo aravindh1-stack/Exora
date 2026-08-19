@@ -133,67 +133,88 @@ export function Reports({ students, rooms = [], loading = false }: ReportsProps)
 
       const deptTitle = selectedDept === 'all' ? 'All Academic Departments' : `${selectedDept} Department`;
 
-      // 1. Logo (Top Left - Prominent 16mm Height & Exact Natural Aspect Ratio Preserved)
-      let textXOffset = 14;
+      // 1. Box 1: Header Box (Logo + Company Name)
+      doc.setDrawColor(15, 23, 42);
+      doc.setLineWidth(0.3);
+      doc.rect(14, 14, 182, 22, 'S');
+
+      let textXOffset = 18;
       if (logoData && logoData.width && logoData.height) {
         try {
           const targetHeight = 16;
           const aspectRatio = logoData.width / logoData.height;
           const targetWidth = targetHeight * aspectRatio;
 
-          doc.addImage(logoData.base64, 'PNG', 14, 10, targetWidth, targetHeight);
-          textXOffset = 14 + targetWidth + 5;
+          doc.addImage(logoData.base64, 'PNG', 18, 17, targetWidth, targetHeight);
+          textXOffset = 18 + targetWidth + 5;
         } catch (e) {
           console.warn('Logo embed error:', e);
         }
       }
 
-      // 2. Company Name & Portal Header
       doc.setTextColor(15, 23, 42); // slate-900
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(16);
-      doc.text('Exora Examination Portal', textXOffset, 17);
+      doc.text('Exora Examination Portal', textXOffset, 23);
 
-      doc.setFontSize(9);
+      doc.setFontSize(9.5);
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(71, 85, 105);
-      doc.text('Aarga Foundation & Aarga Private Limited', textXOffset, 23);
+      doc.text('Aarga Foundation & Aarga Private Limited', textXOffset, 29);
 
-      // 3. Report Title & Audit Reference
+      // 2. Box 2: Audit Metadata Box (Report Name & Scope)
+      doc.setDrawColor(15, 23, 42);
+      doc.setLineWidth(0.3);
+      doc.rect(14, 40, 182, 16, 'S');
+
       doc.setFontSize(11);
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(15, 23, 42);
-      doc.text('OFFICIAL ACADEMIC EXAMINATION AUDIT REPORT', 14, 38);
+      doc.text('OFFICIAL ACADEMIC EXAMINATION AUDIT REPORT', 18, 46);
 
-      doc.setFontSize(8.5);
+      doc.setFontSize(9);
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(100, 116, 139);
-      doc.text(`Department: ${deptTitle}   |   Date: ${reportDate}   |   Ref: EXORA-REP-${Date.now().toString().slice(-6)}`, 14, 44);
+      doc.text(`Department: ${deptTitle}   |   Date: ${reportDate}   |   Ref: EXORA-REP-${Date.now().toString().slice(-6)}`, 18, 52);
 
-      // Separator Line
-      doc.setDrawColor(203, 213, 225);
-      doc.setLineWidth(0.4);
-      doc.line(14, 48, 196, 48);
+      // Helper for short department and status names in table cells
+      const getShortDept = (dept: string) => {
+        if (!dept) return '';
+        if (dept.toLowerCase().includes('computer')) return 'CSE';
+        if (dept.toLowerCase().includes('electronics')) return 'ECE';
+        if (dept.toLowerCase().includes('information')) return 'IT';
+        if (dept.toLowerCase().includes('mechanical')) return 'MECH';
+        if (dept.toLowerCase().includes('civil')) return 'CIVIL';
+        return dept;
+      };
 
-      // 4. Student Roster Table
+      const getShortStatus = (status: string) => {
+        if (status === 'completed') return 'DONE';
+        if (status === 'flagged') return 'FLAGGED';
+        return 'ABSENT';
+      };
+
+      // 3. Box 3: Student Roster Table
       const tableData = filteredStudents.map((s, idx) => [
         idx + 1,
         s.register_no,
         s.name,
-        `${s.department} (Year ${s.year} • Sem ${s.semester})`,
-        s.status.toUpperCase(),
-        s.status === 'completed' ? `${s.score}%` : '—',
+        getShortDept(s.department),
+        `Y${s.year} / S${s.semester}`,
+        getShortStatus(s.status),
+        s.status === 'completed' ? `${s.score}%` : 'ABSENT',
       ]);
 
       autoTable(doc, {
-        startY: 54,
-        head: [['#', 'REGISTER NO', 'STUDENT NAME', 'DEPARTMENT & ROSTER', 'STATUS', 'SCORE (%)']],
+        startY: 60,
+        margin: { top: 60, bottom: 22, left: 14, right: 14 },
+        head: [['#', 'REG NO.', 'NAME', 'DEPT.', 'Y/S', 'STATUS', 'MARK']],
         body: tableData,
         theme: 'grid',
         headStyles: {
           fillColor: [15, 23, 42],
           textColor: [255, 255, 255],
-          fontSize: 8.5,
+          fontSize: 9,
           fontStyle: 'bold',
           halign: 'left',
         },
@@ -202,31 +223,51 @@ export function Reports({ students, rooms = [], loading = false }: ReportsProps)
           textColor: [15, 23, 42],
         },
         columnStyles: {
-          0: { cellWidth: 10 },
-          1: { cellWidth: 34, fontStyle: 'bold' },
-          2: { cellWidth: 50, fontStyle: 'bold' },
-          3: { cellWidth: 48 },
-          4: { cellWidth: 24, fontStyle: 'bold' },
-          5: { cellWidth: 20, fontStyle: 'bold', halign: 'right' },
+          0: { cellWidth: 10, halign: 'center' },
+          1: { cellWidth: 32, fontStyle: 'bold' },
+          2: { cellWidth: 42, fontStyle: 'bold' },
+          3: { cellWidth: 26, fontStyle: 'bold' },
+          4: { cellWidth: 22, halign: 'center' },
+          5: { cellWidth: 24, fontStyle: 'bold', halign: 'center' },
+          6: { cellWidth: 26, fontStyle: 'bold', halign: 'right' },
         },
         styles: {
-          cellPadding: 4,
-          lineColor: [226, 232, 240],
+          cellPadding: 3.5,
+          lineColor: [15, 23, 42],
           lineWidth: 0.2,
+          overflow: 'ellipsize',
+        },
+        didParseCell: (data) => {
+          if (data.section === 'body') {
+            if (data.column.index === 5) {
+              const val = data.cell.text[0];
+              if (val === 'DONE') data.cell.styles.textColor = [5, 150, 105];
+              if (val === 'ABSENT') data.cell.styles.textColor = [225, 29, 72];
+              if (val === 'FLAGGED') data.cell.styles.textColor = [217, 119, 6];
+            }
+            if (data.column.index === 6) {
+              const val = data.cell.text[0];
+              if (val === 'ABSENT') data.cell.styles.textColor = [225, 29, 72];
+            }
+          }
         },
         didDrawPage: (data) => {
-          // Verification Footer
+          // 4. Box 4: Footer Box (Drawn at y=274 with clean 10mm gap below table)
+          doc.setDrawColor(15, 23, 42);
+          doc.setLineWidth(0.3);
+          doc.rect(14, 274, 182, 10, 'S');
+
           const line1 = 'This is a system-generated secure audit document. Authorized by Exora Proctoring Engine.';
           const line2 = 'Aarga Foundation & Aarga Private Limited';
           const pageStr = `Page ${data.pageNumber} of ${doc.getNumberOfPages()}`;
 
-          doc.setFontSize(7.5);
+          doc.setFontSize(8);
           doc.setFont('helvetica', 'normal');
           doc.setTextColor(100, 116, 139);
 
-          doc.text(line1, 14, 283);
-          doc.text(pageStr, 196, 283, { align: 'right' });
-          doc.text(line2, 14, 288);
+          doc.text(line1, 18, 278);
+          doc.text(line2, 18, 282);
+          doc.text(pageStr, 192, 280, { align: 'right' });
         },
       });
 
