@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard,
   BookOpen,
@@ -15,17 +15,24 @@ import {
   Building,
   Calendar,
   LogOut,
+  Eye,
+  X,
+  Zap,
   type LucideIcon,
 } from 'lucide-react';
-import type { StudentWithSession, ExamRoom } from '@/lib/types';
-import { matchStudentToRoom } from '@/lib/queries';
+import type { StudentWithSession, ExamRoom, Question } from '@/lib/types';
+import { matchStudentToRoom, fetchStudentResponses, type ExamResponseDetail } from '@/lib/queries';
 import { initials, formatTimeAgo } from '@/lib/format';
+import { Spinner } from './ui';
+
+import { MyQuizzes } from './MyQuizzes';
 
 type NavKey = 'dashboard' | 'quizzes' | 'performance' | 'profile';
 
 interface StudentDashboardProps {
   student: StudentWithSession;
   rooms: ExamRoom[];
+  questions?: Question[];
   onStartExam: (room: ExamRoom) => void;
   loading?: boolean;
   onLogout?: () => void;
@@ -41,25 +48,60 @@ const NAV: { id: NavKey; label: string; icon: LucideIcon }[] = [
 export function StudentDashboard({
   student,
   rooms,
+  questions = [],
   onStartExam,
   loading = false,
   onLogout,
 }: StudentDashboardProps) {
   const [nav, setNav] = useState<NavKey>('dashboard');
 
-  const eligibleRooms = useMemo(
+  // Review Modal State
+  const [reviewModalOpen, setReviewModalOpen] = useState(false);
+  const [reviewLoading, setReviewLoading] = useState(false);
+  const [reviewResponses, setReviewResponses] = useState<ExamResponseDetail[]>([]);
+  const [reviewRoom, setReviewRoom] = useState<ExamRoom | null>(null);
+
+  // 1. All active rooms matching candidate's department, year, semester
+  const allEligibleRooms = useMemo(
     () => rooms.filter((r) => matchStudentToRoom(student, r) && r.status === 'active'),
     [rooms, student],
   );
 
-  const hasHistory = student.status !== 'in_progress' && student.session_id;
+  // 2. Pending active rooms that student has NOT completed yet
+  const pendingRooms = useMemo(() => {
+    return allEligibleRooms.filter((r) => {
+      // Check if candidate completed this specific room session
+      const isCompleted =
+        student.status === 'completed' &&
+        ((student as any).room_id === r.id || (student.session_id && allEligibleRooms.length === 1));
+      return !isCompleted;
+    });
+  }, [allEligibleRooms, student]);
+
+  const hasPendingQuiz = pendingRooms.length > 0;
+  const hasHistory = student.status !== 'in_progress' && Boolean(student.session_id);
+
+  async function handleOpenReviewModal(room?: ExamRoom) {
+    if (!student.session_id) return;
+    setReviewRoom(room || allEligibleRooms[0] || null);
+    setReviewModalOpen(true);
+    setReviewLoading(true);
+    try {
+      const data = await fetchStudentResponses(student.session_id);
+      setReviewResponses(data);
+    } catch (err) {
+      console.error('Failed to load review responses', err);
+    } finally {
+      setReviewLoading(false);
+    }
+  }
 
   const metrics = [
     {
       label: 'Quizzes Attended',
       value: hasHistory ? '1' : '0',
       icon: BookOpen,
-      tone: 'text-brand-900 dark:text-zinc-100',
+      tone: 'text-brand-950 dark:text-zinc-100',
       bg: 'bg-brand-50 dark:bg-zinc-900',
     },
     {
@@ -69,24 +111,26 @@ export function StudentDashboard({
       tone:
         hasHistory && student.score >= 60
           ? 'text-emerald-700 dark:text-emerald-400'
-          : 'text-brand-900 dark:text-zinc-100',
+          : 'text-brand-950 dark:text-zinc-100',
       bg: 'bg-emerald-50 dark:bg-emerald-950/40',
     },
     {
       label: 'Completion Status',
       value:
-        student.status === 'completed'
-          ? 'Completed'
-          : student.status === 'flagged'
-            ? 'Flagged'
-            : 'Pending',
+        student.status === 'completed' && !hasPendingQuiz
+          ? 'Completed All'
+          : hasPendingQuiz
+            ? 'Active Quiz Pending'
+            : student.status === 'flagged'
+              ? 'Flagged'
+              : 'Enrolled',
       icon: CheckCircle2,
       tone:
         student.status === 'flagged'
           ? 'text-rose-700 dark:text-rose-400'
-          : student.status === 'completed'
+          : student.status === 'completed' && !hasPendingQuiz
             ? 'text-emerald-700 dark:text-emerald-400'
-            : 'text-brand-900 dark:text-zinc-100',
+            : 'text-brand-950 dark:text-zinc-100',
       bg:
         student.status === 'flagged'
           ? 'bg-rose-50 dark:bg-rose-950/40'
@@ -94,9 +138,9 @@ export function StudentDashboard({
     },
     {
       label: 'Pending Active Quizzes',
-      value: String(eligibleRooms.length),
+      value: String(pendingRooms.length),
       icon: Clock,
-      tone: eligibleRooms.length > 0 ? 'text-amber-700 dark:text-amber-400' : 'text-brand-900 dark:text-zinc-100',
+      tone: pendingRooms.length > 0 ? 'text-amber-700 dark:text-amber-400' : 'text-brand-950 dark:text-zinc-100',
       bg: 'bg-amber-50 dark:bg-amber-950/40',
     },
   ];
@@ -187,7 +231,7 @@ export function StudentDashboard({
           <div className="flex items-center gap-3">
             <button className="relative rounded-xl border border-brand-200 bg-brand-50/70 p-2 text-brand-600 transition hover:bg-brand-100/70 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800">
               <Bell className="h-4 w-4" />
-              {eligibleRooms.length > 0 && (
+              {pendingRooms.length > 0 && (
                 <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-rose-500" />
               )}
             </button>
@@ -217,187 +261,477 @@ export function StudentDashboard({
         </header>
 
         <main className="flex-1 space-y-6 px-5 py-6 md:px-8 md:py-8">
-          {/* Candidate Profile Details Banner */}
-          <div className="panel-card flex flex-wrap items-center justify-between gap-4 p-5 dark:bg-[#0c0d10]">
-            <div className="flex items-center gap-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-950 text-white dark:bg-white dark:text-brand-950 shadow-subtle">
-                <UserCircle className="h-7 w-7" />
-              </div>
-              <div>
-                <h3 className="font-display text-base font-bold text-brand-950 dark:text-white">
-                  {student.name}
-                </h3>
-                <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-medium text-brand-500 dark:text-zinc-400">
-                  <span className="font-mono font-bold text-brand-900 dark:text-zinc-200">
-                    SIN: {student.register_no}
+          {nav === 'quizzes' ? (
+            <MyQuizzes
+              student={student}
+              rooms={rooms}
+              onStartExam={onStartExam}
+              onViewAnswers={handleOpenReviewModal}
+            />
+          ) : nav === 'performance' ? (
+            <div className="panel-card space-y-6 p-6 dark:bg-[#0c0d10]">
+              <h3 className="font-display text-lg font-bold text-brand-950 dark:text-white">
+                Academic Performance &amp; Score Insights
+              </h3>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <div className="rounded-xl border border-brand-200 bg-brand-50/70 p-4 dark:border-zinc-800 dark:bg-zinc-950">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-brand-400 dark:text-zinc-500">
+                    Highest Achieved Score
                   </span>
-                  <span>•</span>
-                  <span>{student.department}</span>
-                  <span>•</span>
-                  <span>Year {student.year} (Sem {student.semester})</span>
+                  <p className="font-display text-2xl font-bold text-emerald-600 dark:text-emerald-400">
+                    {hasHistory ? `${student.score}%` : 'N/A'}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-brand-200 bg-brand-50/70 p-4 dark:border-zinc-800 dark:bg-zinc-950">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-brand-400 dark:text-zinc-500">
+                    Accuracy Rating
+                  </span>
+                  <p className="font-display text-2xl font-bold text-brand-950 dark:text-white">
+                    {hasHistory ? (student.score >= 80 ? 'Distinction' : student.score >= 50 ? 'Passed' : 'Needs Work') : 'No Data'}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-brand-200 bg-brand-50/70 p-4 dark:border-zinc-800 dark:bg-zinc-950">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-brand-400 dark:text-zinc-500">
+                    Proctor Compliance
+                  </span>
+                  <p className="font-display text-2xl font-bold text-brand-950 dark:text-white">
+                    {student.status === 'flagged' ? 'Incident Flagged' : '100% Compliant'}
+                  </p>
                 </div>
               </div>
             </div>
-
-            <div className="flex items-center gap-2">
-              <span className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-1 text-xs font-bold text-brand-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300">
-                Department Verified
-              </span>
+          ) : nav === 'profile' ? (
+            <div className="panel-card space-y-6 p-6 dark:bg-[#0c0d10]">
+              <h3 className="font-display text-lg font-bold text-brand-950 dark:text-white">
+                Student Profile &amp; Verification Details
+              </h3>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="space-y-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-brand-400 dark:text-zinc-500">
+                    Candidate Full Name
+                  </span>
+                  <p className="text-sm font-bold text-brand-950 dark:text-white">{student.name}</p>
+                </div>
+                <div className="space-y-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-brand-400 dark:text-zinc-500">
+                    Student Identification Number (SIN NO)
+                  </span>
+                  <p className="font-mono text-sm font-bold text-brand-950 dark:text-white">{student.register_no}</p>
+                </div>
+                <div className="space-y-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-brand-400 dark:text-zinc-500">
+                    Academic Department
+                  </span>
+                  <p className="text-sm font-bold text-brand-950 dark:text-white">{student.department}</p>
+                </div>
+                <div className="space-y-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-brand-400 dark:text-zinc-500">
+                    Academic Year &amp; Semester
+                  </span>
+                  <p className="text-sm font-bold text-brand-950 dark:text-white">
+                    Year {student.year} • Semester {student.semester}
+                  </p>
+                </div>
+              </div>
             </div>
-          </div>
-
-          {/* Metric Cards */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {metrics.map((m, i) => {
-              const Icon = m.icon;
-              return (
-                <motion.div
-                  key={m.label}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.04 }}
-                  className="panel-card rounded-2xl p-5 dark:bg-[#0c0d10]"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-brand-400 dark:text-zinc-500">
-                      {m.label}
-                    </span>
-                    <div className={`flex h-8 w-8 items-center justify-center rounded-xl ${m.bg}`}>
-                      <Icon className={`h-4 w-4 ${m.tone}`} strokeWidth={1.8} />
+          ) : (
+            <>
+              {/* Candidate Profile Details Banner */}
+              <div className="panel-card flex flex-wrap items-center justify-between gap-4 p-5 dark:bg-[#0c0d10]">
+                <div className="flex items-center gap-4">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-950 text-white dark:bg-white dark:text-brand-950 shadow-subtle">
+                    <UserCircle className="h-7 w-7" />
+                  </div>
+                  <div>
+                    <h3 className="font-display text-base font-bold text-brand-950 dark:text-white">
+                      {student.name}
+                    </h3>
+                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-medium text-brand-500 dark:text-zinc-400">
+                      <span className="font-mono font-bold text-brand-900 dark:text-zinc-200">
+                        SIN: {student.register_no}
+                      </span>
+                      <span>•</span>
+                      <span>{student.department}</span>
+                      <span>•</span>
+                      <span>Year {student.year} (Sem {student.semester})</span>
                     </div>
                   </div>
-                  <p className={`font-display mt-3 text-2xl font-bold ${m.tone}`}>{m.value}</p>
-                </motion.div>
-              );
-            })}
-          </div>
+                </div>
 
-          {/* Active Departmental Quiz Banner */}
-          {eligibleRooms.length > 0 ? (
-            <motion.div
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="overflow-hidden rounded-2xl border border-brand-950/10 bg-brand-950 p-6 shadow-elevated dark:border-white/10 dark:bg-white sm:p-7"
-            >
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-white dark:bg-brand-950/10 dark:text-brand-950">
-                    <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-                    Live Exam Assigned to Your Department
+                <div className="flex items-center gap-2">
+                  <span className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-1 text-xs font-bold text-brand-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300">
+                    Department Verified
                   </span>
-                  <h3 className="font-display mt-3 text-lg font-bold text-white dark:text-brand-950 sm:text-xl">
-                    {eligibleRooms[0].title}
+                </div>
+              </div>
+
+              {/* Metric Cards */}
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                {metrics.map((m, i) => {
+                  const Icon = m.icon;
+                  return (
+                    <motion.div
+                      key={m.label}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: i * 0.04 }}
+                      className="panel-card rounded-2xl p-5 dark:bg-[#0c0d10]"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-brand-400 dark:text-zinc-500">
+                          {m.label}
+                        </span>
+                        <div className={`flex h-8 w-8 items-center justify-center rounded-xl ${m.bg}`}>
+                          <Icon className={`h-4 w-4 ${m.tone}`} strokeWidth={1.8} />
+                        </div>
+                      </div>
+                      <p className={`font-display mt-3 text-2xl font-bold ${m.tone}`}>{m.value}</p>
+                    </motion.div>
+                  );
+                })}
+              </div>
+
+              {/* Dynamic Active Banner Workflow */}
+              {hasPendingQuiz ? (
+                /* CASE 1: Pending Active Quiz Banner (Prioritizes Latest Pending Quiz) */
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="overflow-hidden rounded-2xl border border-amber-500/20 bg-brand-950 p-6 shadow-elevated text-white sm:p-7 dark:border-amber-400/20 dark:bg-[#0c0d10]"
+                >
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <span className="inline-flex items-center gap-2 rounded-full bg-amber-500/20 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-amber-300">
+                        <Zap className="h-3.5 w-3.5 text-amber-400 animate-pulse" />
+                        New Exam Live for Your Department
+                      </span>
+                      <h3 className="font-display mt-3 text-lg font-bold text-white sm:text-xl">
+                        {pendingRooms[0].title}
+                      </h3>
+                      <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-white/80">
+                        <span className="flex items-center gap-1.5 font-medium">
+                          <Building className="h-3.5 w-3.5" /> {pendingRooms[0].department}
+                        </span>
+                        <span className="flex items-center gap-1.5 font-medium">
+                          <Calendar className="h-3.5 w-3.5" /> Year {pendingRooms[0].year} • Sem{' '}
+                          {pendingRooms[0].semester}
+                        </span>
+                        <span className="flex items-center gap-1.5 font-medium">
+                          <Clock className="h-3.5 w-3.5" /> {pendingRooms[0].duration_minutes} Mins
+                        </span>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => onStartExam(pendingRooms[0])}
+                      className="flex shrink-0 items-center justify-center gap-2 rounded-xl bg-white px-6 py-3.5 text-xs font-bold uppercase tracking-wider text-brand-950 shadow-subtle transition hover:bg-brand-50 active:scale-[0.98] dark:bg-white dark:text-brand-950 dark:hover:bg-zinc-200"
+                    >
+                      <span>Start Exam Now</span>
+                      <ArrowRight className="h-4 w-4" />
+                    </button>
+                  </div>
+                </motion.div>
+              ) : hasHistory ? (
+                /* CASE 2: All Assigned Exams Completed */
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="overflow-hidden rounded-2xl border border-emerald-500/20 bg-emerald-950 p-6 shadow-elevated text-white sm:p-7 dark:border-emerald-500/30 dark:bg-[#0d1f17]"
+                >
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <span className="inline-flex items-center gap-2 rounded-full bg-emerald-500/20 px-3.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-emerald-300">
+                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                        You Have Completed All Assigned Exams!
+                      </span>
+                      <h3 className="font-display mt-3 text-xl font-bold text-white sm:text-2xl">
+                        All departmental units for your semester are completed!
+                      </h3>
+                      <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-emerald-200/90">
+                        <span className="font-bold text-white text-sm">
+                          Latest Score: <span className="font-display text-emerald-400 font-extrabold text-base">{student.score}%</span>
+                        </span>
+                        <span>•</span>
+                        <span>Status: {student.status === 'flagged' ? 'Flagged' : 'Passed'}</span>
+                        <span>•</span>
+                        <span>Submitted: {formatTimeAgo(student.completed_at)}</span>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => handleOpenReviewModal()}
+                      className="flex shrink-0 items-center justify-center gap-2.5 rounded-xl bg-white px-6 py-3.5 text-xs font-bold uppercase tracking-wider text-emerald-950 shadow-subtle transition hover:bg-emerald-50 active:scale-[0.98] dark:bg-emerald-400 dark:text-emerald-950 dark:hover:bg-emerald-300"
+                    >
+                      <Eye className="h-4 w-4" />
+                      <span>View Submitted Answers</span>
+                    </button>
+                  </div>
+                </motion.div>
+              ) : (
+                /* CASE 3: No Active Exams Assigned Right Now */
+                <div className="panel-card flex flex-col items-center justify-center rounded-2xl py-14 text-center dark:bg-[#0c0d10]">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-brand-50 dark:bg-zinc-900">
+                    <BookOpen className="h-6 w-6 text-brand-400 dark:text-zinc-500" />
+                  </div>
+                  <h3 className="font-display mt-3 text-sm font-bold text-brand-950 dark:text-white">
+                    No active exams assigned right now
                   </h3>
-                  <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-white/80 dark:text-brand-950/80">
-                    <span className="flex items-center gap-1.5 font-medium">
-                      <Building className="h-3.5 w-3.5" /> {eligibleRooms[0].department}
+                  <p className="mt-1 max-w-sm text-xs text-brand-500 dark:text-zinc-400">
+                    When your department coordinator launches a new examination room for your academic year and semester, it will appear here automatically.
+                  </p>
+                </div>
+              )}
+
+              {/* Examination Attempt History Table */}
+              <div className="panel-card rounded-2xl p-0 overflow-hidden dark:bg-[#0c0d10]">
+                <div className="flex items-center justify-between border-b border-brand-100 px-5 py-4 dark:border-zinc-800">
+                  <div>
+                    <h3 className="font-display text-sm font-bold text-brand-950 dark:text-white">
+                      Latest Examination Attempt
+                    </h3>
+                    <p className="mt-0.5 text-xs text-brand-400 dark:text-zinc-500">
+                      Historical score logs and proctoring status for your profile.
+                    </p>
+                  </div>
+                  <Flag className="h-4 w-4 text-brand-300 dark:text-zinc-600" />
+                </div>
+
+                {loading ? (
+                  <div className="space-y-2 p-5">
+                    {Array.from({ length: 2 }).map((_, i) => (
+                      <div key={i} className="skeleton h-12 rounded-lg" />
+                    ))}
+                  </div>
+                ) : !hasHistory ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-center">
+                    <Clock className="h-8 w-8 text-brand-300 dark:text-zinc-700" />
+                    <p className="mt-3 text-xs font-medium text-brand-400 dark:text-zinc-500">
+                      No completed examination attempts recorded yet.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead>
+                        <tr className="border-b border-brand-100 text-[10px] font-bold uppercase tracking-wider text-brand-400 dark:border-zinc-800 dark:text-zinc-500">
+                          <th className="px-5 py-3.5 font-bold">Examination</th>
+                          <th className="px-5 py-3.5 font-bold">Score Percentage</th>
+                          <th className="px-5 py-3.5 font-bold">Status</th>
+                          <th className="px-5 py-3.5 font-bold">Completion Timestamp</th>
+                          <th className="px-5 py-3.5 text-right font-bold">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-brand-100 dark:divide-zinc-800/60">
+                        <tr className="transition hover:bg-brand-50/60 dark:hover:bg-zinc-900/40">
+                          <td className="px-5 py-4 font-bold text-brand-950 dark:text-zinc-100">
+                            {allEligibleRooms[0]?.title || 'Department Unit Test'}
+                          </td>
+                          <td className="font-display px-5 py-4 text-sm font-bold text-brand-950 dark:text-white">
+                            {student.score}%
+                          </td>
+                          <td className="px-5 py-4">
+                            <span
+                              className={`inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-[10px] font-bold ${
+                                student.status === 'flagged'
+                                  ? 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-300'
+                                  : 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-300'
+                              }`}
+                            >
+                              {student.status === 'flagged' ? (
+                                <Flag className="h-3 w-3" />
+                              ) : (
+                                <CheckCircle2 className="h-3 w-3" />
+                              )}
+                              {student.status === 'flagged' ? 'Flagged' : 'Attended'}
+                            </span>
+                          </td>
+                          <td className="px-5 py-4 text-brand-400 dark:text-zinc-500 font-mono">
+                            {formatTimeAgo(student.completed_at)}
+                          </td>
+                          <td className="px-5 py-4 text-right">
+                            <button
+                              onClick={() => handleOpenReviewModal()}
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-brand-200 bg-white px-3 py-1.5 text-xs font-bold text-brand-900 shadow-subtle transition hover:bg-brand-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                            >
+                              <Eye className="h-3.5 w-3.5" />
+                              <span>View Answers</span>
+                            </button>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </main>
+      </div>
+
+      {/* Answer Key & Response Review Modal */}
+      <AnimatePresence>
+        {reviewModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setReviewModalOpen(false)}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm"
+            />
+
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 12 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 12 }}
+              className="panel-card relative z-10 flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-elevated dark:bg-[#0c0d10]"
+            >
+              {/* Modal Header */}
+              <div className="flex items-center justify-between border-b border-brand-100 px-6 py-4 dark:border-zinc-800">
+                <div>
+                  <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                    <CheckCircle2 className="h-3.5 w-3.5" /> Submitted Examination Review
+                  </span>
+                  <h3 className="font-display text-base font-bold text-brand-950 dark:text-white sm:text-lg">
+                    {reviewRoom?.title || 'Department Unit Test'} — Answer Key &amp; Response Review
+                  </h3>
+                </div>
+                <button
+                  onClick={() => setReviewModalOpen(false)}
+                  className="rounded-lg p-1.5 text-brand-400 transition hover:bg-brand-50 hover:text-brand-950 dark:text-zinc-500 dark:hover:bg-zinc-900 dark:hover:text-white"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              {/* Modal Content Body */}
+              <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                {/* Performance Summary Banner */}
+                <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-brand-200/80 bg-brand-50/70 p-4 dark:border-zinc-800 dark:bg-zinc-950">
+                  <div>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-brand-400 dark:text-zinc-500">
+                      Overall Achieved Score
                     </span>
-                    <span className="flex items-center gap-1.5 font-medium">
-                      <Calendar className="h-3.5 w-3.5" /> Year {eligibleRooms[0].year} • Sem{' '}
-                      {eligibleRooms[0].semester}
+                    <p className="font-display text-2xl font-bold text-emerald-600 dark:text-emerald-400">
+                      {student.score}%
+                    </p>
+                  </div>
+
+                  <div>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-brand-400 dark:text-zinc-500">
+                      Student SIN NO
                     </span>
-                    <span className="flex items-center gap-1.5 font-medium">
-                      <Clock className="h-3.5 w-3.5" /> {eligibleRooms[0].duration_minutes} Mins
+                    <p className="font-mono text-xs font-bold text-brand-950 dark:text-zinc-200">
+                      {student.register_no} ({student.name})
+                    </p>
+                  </div>
+
+                  <div>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-brand-400 dark:text-zinc-500">
+                      Proctor Status
                     </span>
+                    <p className="text-xs font-bold text-brand-950 dark:text-zinc-200">
+                      {student.status === 'flagged' ? 'Flagged' : 'Verified'}
+                    </p>
                   </div>
                 </div>
 
+                {reviewLoading ? (
+                  <div className="flex flex-col items-center justify-center py-12">
+                    <Spinner size={24} />
+                    <p className="mt-3 text-xs font-medium text-brand-400 dark:text-zinc-500">
+                      Loading submitted answer key details...
+                    </p>
+                  </div>
+                ) : reviewResponses.length === 0 && questions.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-center">
+                    <BookOpen className="h-8 w-8 text-brand-300 dark:text-zinc-700" />
+                    <p className="mt-3 text-xs font-medium text-brand-400 dark:text-zinc-500">
+                      No response record found for this session.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {(reviewResponses.length > 0 ? reviewResponses : []).map((resp, idx) => {
+                      const q = resp.question;
+                      if (!q) return null;
+                      return (
+                        <div
+                          key={resp.id || idx}
+                          className="rounded-2xl border border-brand-200/80 bg-white p-5 space-y-3 dark:border-zinc-800 dark:bg-zinc-950/60"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <h4 className="text-xs font-bold text-brand-950 dark:text-white">
+                              Q{idx + 1}. {q.text}
+                            </h4>
+                            <span className="shrink-0 rounded-md border border-brand-200 bg-brand-50 px-2 py-0.5 text-[10px] font-bold text-brand-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
+                              {q.topic}
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                            {q.options.map((opt, optIdx) => {
+                              const isStudentSelected = resp.selected_index === optIdx;
+                              const isCorrectAnswer = q.correct_index === optIdx;
+
+                              let cardStyle =
+                                'border-brand-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 text-brand-900 dark:text-zinc-200';
+                              let badgeText = null;
+
+                              if (isStudentSelected && isCorrectAnswer) {
+                                cardStyle =
+                                  'border-emerald-300 bg-emerald-50 text-emerald-950 dark:border-emerald-900/80 dark:bg-emerald-950/60 dark:text-emerald-200 font-bold';
+                                badgeText = '✓ Your Choice (Correct)';
+                              } else if (isStudentSelected && !isCorrectAnswer) {
+                                cardStyle =
+                                  'border-rose-300 bg-rose-50 text-rose-950 dark:border-rose-900/80 dark:bg-rose-950/60 dark:text-rose-200 font-bold';
+                                badgeText = '✗ Your Choice (Incorrect)';
+                              } else if (isCorrectAnswer) {
+                                cardStyle =
+                                  'border-emerald-300/80 bg-emerald-50/50 text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-300';
+                                badgeText = 'Correct Answer';
+                              }
+
+                              return (
+                                <div
+                                  key={optIdx}
+                                  className={`flex items-center justify-between rounded-xl border p-3 text-xs transition ${cardStyle}`}
+                                >
+                                  <span>
+                                    {String.fromCharCode(65 + optIdx)}. {opt}
+                                  </span>
+                                  {badgeText && (
+                                    <span className="text-[10px] font-bold uppercase tracking-wider">
+                                      {badgeText}
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Modal Footer */}
+              <div className="flex items-center justify-between border-t border-brand-100 px-6 py-4 dark:border-zinc-800">
+                <span className="text-xs text-brand-400 dark:text-zinc-500 font-medium">
+                  Verified by Exora Auto-Grading Engine
+                </span>
                 <button
-                  onClick={() => onStartExam(eligibleRooms[0])}
-                  className="flex shrink-0 items-center justify-center gap-2 rounded-xl bg-white px-6 py-3.5 text-xs font-bold uppercase tracking-wider text-brand-950 shadow-subtle transition hover:bg-brand-50 active:scale-[0.98] dark:bg-brand-950 dark:text-white dark:hover:bg-brand-800"
+                  onClick={() => setReviewModalOpen(false)}
+                  className="rounded-xl bg-brand-950 px-5 py-2.5 text-xs font-bold text-white shadow-subtle transition hover:bg-brand-800 dark:bg-white dark:text-brand-950 dark:hover:bg-zinc-200"
                 >
-                  <span>Start Exam Now</span>
-                  <ArrowRight className="h-4 w-4" />
+                  Close Review
                 </button>
               </div>
             </motion.div>
-          ) : (
-            <div className="panel-card flex flex-col items-center justify-center rounded-2xl py-14 text-center dark:bg-[#0c0d10]">
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-brand-50 dark:bg-zinc-900">
-                <BookOpen className="h-6 w-6 text-brand-400 dark:text-zinc-500" />
-              </div>
-              <h3 className="font-display mt-3 text-sm font-bold text-brand-950 dark:text-white">
-                No active exams assigned right now
-              </h3>
-              <p className="mt-1 max-w-sm text-xs text-brand-500 dark:text-zinc-400">
-                When your department coordinator launches a new examination room for your academic year and semester, it will appear here automatically.
-              </p>
-            </div>
-          )}
-
-          {/* Examination Attempt History Table */}
-          <div className="panel-card rounded-2xl p-0 overflow-hidden dark:bg-[#0c0d10]">
-            <div className="flex items-center justify-between border-b border-brand-100 px-5 py-4 dark:border-zinc-800">
-              <div>
-                <h3 className="font-display text-sm font-bold text-brand-950 dark:text-white">
-                  Latest Examination Attempt
-                </h3>
-                <p className="mt-0.5 text-xs text-brand-400 dark:text-zinc-500">
-                  Historical score logs and proctoring status for your profile.
-                </p>
-              </div>
-              <Flag className="h-4 w-4 text-brand-300 dark:text-zinc-600" />
-            </div>
-
-            {loading ? (
-              <div className="space-y-2 p-5">
-                {Array.from({ length: 2 }).map((_, i) => (
-                  <div key={i} className="skeleton h-12 rounded-lg" />
-                ))}
-              </div>
-            ) : !hasHistory ? (
-              <div className="flex flex-col items-center justify-center py-12 text-center">
-                <Clock className="h-8 w-8 text-brand-300 dark:text-zinc-700" />
-                <p className="mt-3 text-xs font-medium text-brand-400 dark:text-zinc-500">
-                  No completed examination attempts recorded yet.
-                </p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead>
-                    <tr className="border-b border-brand-100 text-[10px] font-bold uppercase tracking-wider text-brand-400 dark:border-zinc-800 dark:text-zinc-500">
-                      <th className="px-5 py-3.5 font-bold">Examination</th>
-                      <th className="px-5 py-3.5 font-bold">Score Percentage</th>
-                      <th className="px-5 py-3.5 font-bold">Status</th>
-                      <th className="px-5 py-3.5 text-right font-bold">Completion Timestamp</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-brand-100 dark:divide-zinc-800/60">
-                    <tr className="transition hover:bg-brand-50/60 dark:hover:bg-zinc-900/40">
-                      <td className="px-5 py-4 font-bold text-brand-950 dark:text-zinc-100">
-                        Department Unit Test
-                      </td>
-                      <td className="font-display px-5 py-4 text-sm font-bold text-brand-950 dark:text-white">
-                        {student.score}%
-                      </td>
-                      <td className="px-5 py-4">
-                        <span
-                          className={`inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-[10px] font-bold ${
-                            student.status === 'flagged'
-                              ? 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-300'
-                              : 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-300'
-                          }`}
-                        >
-                          {student.status === 'flagged' ? (
-                            <Flag className="h-3 w-3" />
-                          ) : (
-                            <CheckCircle2 className="h-3 w-3" />
-                          )}
-                          {student.status === 'flagged' ? 'Flagged' : 'Attended'}
-                        </span>
-                      </td>
-                      <td className="px-5 py-4 text-right text-brand-400 dark:text-zinc-500 font-mono">
-                        {formatTimeAgo(student.completed_at)}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            )}
           </div>
-        </main>
-      </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

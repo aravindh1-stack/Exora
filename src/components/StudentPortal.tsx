@@ -16,6 +16,7 @@ import {
   Check,
   LogOut,
   Zap,
+  Download,
 } from 'lucide-react';
 import type { StudentWithSession, ExamRoom, Question } from '@/lib/types';
 import { submitExamSession, logProctoringIncident, matchStudentToRoom, createStudent } from '@/lib/queries';
@@ -133,6 +134,12 @@ export function StudentPortal({
   const [warningToast, setWarningToast] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [finalScore, setFinalScore] = useState<number | null>(null);
+
+  // Strict SEB Detection State
+  const isSEBVerified = useMemo(() => {
+    const ua = navigator.userAgent;
+    return ua.includes('SEB') || ua.includes('SafeExamBrowser');
+  }, []);
 
   // Derived current question (safeguarded against empty/undefined arrays)
   const currentQ = useMemo(() => {
@@ -263,19 +270,46 @@ export function StudentPortal({
 
       safeStorage.setItem('exora_session_reg', student.register_no);
       safeStorage.setItem('exora_session_room', room.room_code);
-      safeStorage.setItem('exora_session_stage', 'terms');
+
+      const targetStage = isSEBVerified ? 'terms' : 'seb_check';
+      safeStorage.setItem('exora_session_stage', targetStage);
 
       const url = new URL(window.location.href);
       url.searchParams.set('mode', 'student');
       url.searchParams.set('reg', student.register_no);
       url.searchParams.set('room', room.room_code);
-      url.searchParams.set('stage', 'terms');
+      url.searchParams.set('stage', targetStage);
       window.history.replaceState({}, '', url.toString());
 
-      setStage('terms');
+      setStage(targetStage);
     },
-    [currentCandidate, questions, getRoomQuestionsStrict],
+    [currentCandidate, questions, getRoomQuestionsStrict, isSEBVerified],
   );
+
+  // Return cleanly to Student Dashboard
+  const returnToDashboard = useCallback(() => {
+    safeStorage.setItem('exora_session_stage', 'dashboard');
+    safeStorage.removeItem('exora_session_room');
+    const url = new URL(window.location.href);
+    url.searchParams.delete('room');
+    url.searchParams.set('stage', 'dashboard');
+    window.history.replaceState({}, '', url.toString());
+    setActiveRoom(null);
+    setStage('dashboard');
+  }, []);
+
+  // Listen for browser popstate (back/forward navigation)
+  useEffect(() => {
+    const handlePopState = () => {
+      const searchParams = new URLSearchParams(window.location.search);
+      const urlStage = searchParams.get('stage') as Stage;
+      if (!urlStage || urlStage === 'dashboard') {
+        returnToDashboard();
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [returnToDashboard]);
 
 
   // Restore State from URL query parameters or safeStorage (Handles SEB page reloads cleanly)
@@ -374,13 +408,13 @@ export function StudentPortal({
     }
 
     if (urlStage) {
-      if (loading && urlStage === 'exam') {
-        setStage('terms');
-      } else {
-        setStage(urlStage);
+      let targetStage = urlStage;
+      if ((targetStage === 'terms' || targetStage === 'exam') && !isSEBVerified) {
+        targetStage = 'seb_check';
       }
+      setStage(targetStage);
     }
-  }, [students, rooms, questions, loading, getRoomQuestionsStrict]);
+  }, [students, rooms, questions, loading, getRoomQuestionsStrict, isSEBVerified]);
 
   // 1. Candidate Verification & Stage Transition Handler
   function handleVerifyCandidate() {
@@ -508,17 +542,16 @@ export function StudentPortal({
     setStage(targetStage);
   }
 
-  // Strict SEB Detection State
-  const isSEBVerified = useMemo(() => {
-    const ua = navigator.userAgent;
-    return ua.includes('SEB') || ua.includes('SafeExamBrowser');
-  }, []);
 
-  // Auto-transition to Terms when inside SEB
+
+  // Auto-transition to Terms when inside SEB, or enforce seb_check when outside SEB
   useEffect(() => {
     if (stage === 'seb_check' && isSEBVerified) {
       safeStorage.setItem('exora_session_stage', 'terms');
       setStage('terms');
+    } else if ((stage === 'terms' || stage === 'exam') && !isSEBVerified) {
+      safeStorage.setItem('exora_session_stage', 'seb_check');
+      setStage('seb_check');
     }
   }, [stage, isSEBVerified]);
 
@@ -730,7 +763,7 @@ export function StudentPortal({
   }, [roomQuestions, selectedAnswers, handleFinalSubmit]);
 
   return (
-    <div className={stage === 'dashboard' ? 'w-full min-h-screen' : 'mx-auto max-w-5xl px-4 py-8 sm:py-12'}>
+    <div className={stage === 'dashboard' ? 'w-full min-h-screen' : 'mx-auto max-w-5xl px-4 py-8 sm:py-12 min-h-[85vh] flex flex-col justify-center'}>
 
 
       <AnimatePresence mode="wait">
@@ -739,6 +772,7 @@ export function StudentPortal({
           <StudentDashboard
             student={currentCandidate}
             rooms={rooms}
+            questions={questions}
             onStartExam={handleLaunchQuiz}
             loading={loading}
             onLogout={() => {
@@ -751,93 +785,165 @@ export function StudentPortal({
         )}
 
 
-        {/* Stage 2: Safe Exam Browser (SEB) Launcher Screen */}
-        {stage === 'seb_check' && activeStudent && activeRoom && (
+        {/* Stage 2: Safe Exam Browser (SEB) Launcher Screen (Theme-Responsive Full Page Split Screen) */}
+        {(stage === 'seb_check' || ((stage === 'terms' || stage === 'exam') && !isSEBVerified)) && activeStudent && activeRoom && (
           <motion.div
             key="seb_check"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            className="panel-card mx-auto max-w-xl rounded-2xl p-6 sm:p-8"
+            initial={{ opacity: 0, scale: 0.99 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.99 }}
+            className="fixed inset-0 z-50 flex min-h-screen w-full flex-col overflow-y-auto bg-slate-50 text-slate-900 dark:bg-[#090a0f] dark:text-slate-100 font-sans"
           >
-            <div className="flex items-center justify-between border-b border-slate-100 pb-4 dark:border-zinc-800">
-              <div>
-                <span className="inline-flex items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-300">
-                  <CheckCircle2 className="h-3.5 w-3.5" /> Candidate Identity Verified
-                </span>
-                <h3 className="mt-2 text-lg font-bold text-slate-900 dark:text-white">
-                  {activeRoom.title}
-                </h3>
+            <div className="pointer-events-none fixed inset-0 bg-grid-light dark:bg-grid-dark bg-grid opacity-20" />
+
+            <div className="relative flex flex-1 flex-col my-auto w-full max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 lg:grid lg:grid-cols-12 lg:gap-8 items-center">
+              {/* Left / Hero Security Panel */}
+              <div className="relative flex flex-col justify-center p-6 sm:p-8 lg:col-span-6 lg:p-10 xl:col-span-6 w-full">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-900 text-white shadow-subtle dark:bg-white dark:text-slate-950">
+                    <ShieldCheck className="h-6 w-6" strokeWidth={2} />
+                  </div>
+                  <div>
+                    <h1 className="font-display text-lg font-bold tracking-tight text-slate-900 dark:text-white">
+                      Exora Proctoring Engine
+                    </h1>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                      SSCET Examination Protocol
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-8 space-y-5 sm:mt-10">
+                  <div className="inline-flex items-center gap-2 rounded-full border border-amber-300 bg-amber-50 px-3.5 py-1.5 text-xs font-semibold text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
+                    <Zap className="h-4 w-4 text-amber-500 dark:text-amber-400 animate-pulse" />
+                    <span>Safe Exam Browser (SEB) Kiosk Lockdown Required</span>
+                  </div>
+
+                  <h2 className="font-display text-3xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-4xl lg:text-5xl leading-tight">
+                    Secure Examination Launcher
+                  </h2>
+                  <p className="text-xs leading-relaxed text-slate-600 dark:text-slate-400 sm:text-sm max-w-xl">
+                    To preserve institutional integrity and prevent unauthorized external tools, this examination is locked strictly inside the <strong>Safe Exam Browser (SEB)</strong> environment.
+                  </p>
+
+                  {/* Pre-Flight Checklist Card */}
+                  <div className="space-y-3 rounded-2xl border border-slate-200/80 bg-white p-5 max-w-xl shadow-sm dark:border-zinc-800/80 dark:bg-zinc-950/70">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                      Pre-Flight Lockdown Protocol
+                    </h3>
+
+                    <div className="space-y-2.5 text-xs text-slate-700 dark:text-slate-300">
+                      <div className="flex items-center gap-3">
+                        <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                        <span>Kiosk Mode Environment (Blocks Alt-Tab &amp; Shortcuts)</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                        <span>Encrypted Database Socket Stream to Supabase</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                        <span>Automated Proctor Telemetry Incident Logging</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-8 pt-4 border-t border-slate-200/80 dark:border-zinc-800/80 flex items-center justify-between text-xs text-slate-500 dark:text-slate-500 max-w-xl">
+                  <span>Proctoring Engine v2.4</span>
+                  <span>AES-256 Encrypted Session</span>
+                </div>
               </div>
-              <span className="font-mono text-xs font-bold text-slate-500 dark:text-zinc-400">
-                Code: {activeRoom.room_code}
-              </span>
-            </div>
 
-            <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
-              <div className="rounded-xl border border-slate-100 bg-slate-50 p-3 dark:border-zinc-800/80 dark:bg-zinc-950/60">
-                <span className="text-slate-500 dark:text-zinc-400">Student Name</span>
-                <p className="mt-0.5 font-bold text-slate-900 dark:text-white">{activeStudent.name}</p>
-                <p className="font-mono text-[11px] text-slate-500 dark:text-zinc-400">SIN: {activeStudent.register_no}</p>
+              {/* Right / Interactive Verification & Launch Workspace */}
+              <div className="relative flex flex-col justify-center p-6 sm:p-8 lg:col-span-6 lg:p-10 xl:col-span-6 w-full">
+                <div className="panel-card rounded-3xl border border-slate-200/80 bg-white p-6 sm:p-8 space-y-6 shadow-xl dark:border-zinc-800/90 dark:bg-zinc-950">
+                  {/* Candidate Profile Details Card */}
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between border-b border-slate-100 dark:border-zinc-800/80 pb-4">
+                      <div>
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                          Candidate Identity Verified
+                        </span>
+                        <h3 className="font-display text-xl font-bold text-slate-900 dark:text-white mt-1">
+                          {activeStudent.name}
+                        </h3>
+                        <p className="font-mono text-xs text-slate-500 dark:text-slate-400">SIN NO: {activeStudent.register_no}</p>
+                      </div>
+                      <span className="rounded-xl border border-slate-200 bg-slate-100 px-3.5 py-2 font-mono text-xs font-bold text-slate-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300">
+                        #{activeRoom.room_code}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 text-xs">
+                      <div className="rounded-xl border border-slate-200/80 bg-slate-50/70 p-3.5 dark:border-zinc-800/80 dark:bg-zinc-900/60">
+                        <span className="text-slate-500 dark:text-slate-400">Assigned Unit Test</span>
+                        <p className="font-display mt-0.5 font-bold text-slate-900 dark:text-white text-sm">{activeRoom.title}</p>
+                      </div>
+                      <div className="rounded-xl border border-slate-200/80 bg-slate-50/70 p-3.5 dark:border-zinc-800/80 dark:bg-zinc-900/60">
+                        <span className="text-slate-500 dark:text-slate-400">Target Department &amp; Roster</span>
+                        <p className="font-display mt-0.5 font-bold text-slate-900 dark:text-white text-sm">{activeRoom.department}</p>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400">Year {activeRoom.year} • Sem {activeRoom.semester}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Launch Actions Container */}
+                  <div className="rounded-2xl border border-amber-200/80 bg-amber-50/70 p-5 space-y-4 dark:border-amber-500/30 dark:bg-amber-500/5">
+                    <div className="flex items-start gap-3">
+                      <ShieldCheck className="h-6 w-6 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                      <div>
+                        <h4 className="font-display text-base font-bold text-amber-950 dark:text-amber-200">
+                          Launch Exam via Safe Exam Browser
+                        </h4>
+                        <p className="text-xs text-amber-950/80 dark:text-amber-300/80 mt-0.5">
+                          Follow the steps below to launch the proctored examination environment.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 pt-2">
+                      <a
+                        href="https://safeexambrowser.org/download_en.html"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-center gap-2 rounded-xl border border-amber-300 bg-white px-4 py-3.5 text-xs font-semibold text-slate-800 transition hover:bg-slate-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white dark:hover:bg-zinc-800 shadow-sm"
+                      >
+                        <Download className="h-4 w-4" />
+                        <span>1. Download SEB Client</span>
+                      </a>
+
+                      <button
+                        onClick={() => {
+                          const proto = window.location.protocol === 'https:' ? 'sebs:' : 'seb:';
+                          const directUrl = `${proto}//${window.location.host}${window.location.pathname}?mode=student&room=${activeRoom.room_code}`;
+                          window.location.href = directUrl;
+                        }}
+                        className="flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3.5 text-xs font-bold uppercase tracking-wider text-white shadow-elevated transition hover:bg-slate-800 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200 active:scale-[0.98]"
+                      >
+                        <Maximize2 className="h-4 w-4 text-white dark:text-slate-950" />
+                        <span>2. Launch Safe Exam Browser</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 flex items-center justify-between border-t border-slate-100 dark:border-zinc-800/80">
+                    <button
+                      onClick={returnToDashboard}
+                      className="flex items-center gap-2 text-xs font-semibold text-slate-500 transition hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
+                    >
+                      <ArrowLeft className="h-4 w-4" />
+                      <span>Back to Student Dashboard</span>
+                    </button>
+                  </div>
+                </div>
               </div>
-
-              <div className="rounded-xl border border-slate-100 bg-slate-50 p-3 dark:border-zinc-800/80 dark:bg-zinc-950/60">
-                <span className="text-slate-500 dark:text-zinc-400">Target Group</span>
-                <p className="mt-0.5 font-bold text-slate-900 dark:text-white">{activeRoom.department}</p>
-                <p className="text-[11px] text-slate-500 dark:text-zinc-400">Year {activeRoom.year} • Sem {activeRoom.semester}</p>
-              </div>
-            </div>
-
-            {/* Safe Exam Browser (SEB) Launch Card */}
-            <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50/70 p-5 dark:border-amber-900/60 dark:bg-amber-950/30">
-              <div className="flex items-center gap-2">
-                <ShieldCheck className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-                <h4 className="text-sm font-bold text-amber-900 dark:text-amber-200">
-                  Safe Exam Browser (SEB) Required
-                </h4>
-              </div>
-
-              <p className="mt-2 text-xs text-amber-950 dark:text-amber-300/80">
-                To guarantee exam integrity, this exam must be taken inside <strong>Safe Exam Browser</strong>. Please download SEB if not installed, or launch SEB directly below.
-              </p>
-
-              <div className="mt-4 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-                <a
-                  href="https://safeexambrowser.org/download_en.html"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-center gap-1.5 rounded-xl border border-amber-300 bg-white px-3.5 py-3 text-xs font-bold text-slate-800 transition hover:bg-slate-50 dark:border-amber-800 dark:bg-pitch-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
-                >
-                  <span>1. Install Safe Exam Browser</span>
-                </a>
-
-                <button
-                  onClick={() => {
-                    const proto = window.location.protocol === 'https:' ? 'sebs:' : 'seb:';
-                    const directUrl = `${proto}//${window.location.host}${window.location.pathname}?mode=student&room=${activeRoom.room_code}`;
-                    window.location.href = directUrl;
-                  }}
-                  className="flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-3.5 py-3 text-xs font-bold text-white shadow-subtle transition hover:bg-slate-800 dark:bg-zinc-100 dark:text-black dark:hover:bg-zinc-200"
-                >
-                  <Maximize2 className="h-4 w-4" />
-                  <span>2. Launch Safe Exam Browser</span>
-                </button>
-              </div>
-            </div>
-
-            <div className="mt-6 flex items-center justify-between border-t border-slate-100 pt-4 dark:border-zinc-800">
-              <button
-                onClick={() => setStage('verify')}
-                className="flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-white"
-              >
-                <ArrowLeft className="h-4 w-4" /> Back to Verification
-              </button>
             </div>
           </motion.div>
         )}
 
         {/* Stage 2.5: Student Dashboard & Examination Terms Agreement */}
-        {stage === 'terms' && activeStudent && activeRoom && (
+        {stage === 'terms' && isSEBVerified && activeStudent && activeRoom && (
           <motion.div
             key="terms"
             initial={{ opacity: 0, y: 10 }}
@@ -853,20 +959,20 @@ export function StudentPortal({
                     <Zap className="h-5 w-5 animate-pulse" />
                   </div>
                   <div>
-                    <span className="inline-flex items-center gap-1 text-[10px] font-extrabold uppercase tracking-wider text-amber-700 dark:text-amber-300">
-                      ⚡ Priority Notice — Active Department Quiz
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-300">
+                      Priority Notice — Active Department Quiz
                     </span>
-                    <h4 className="text-sm font-bold text-slate-900 dark:text-white">
+                    <h4 className="font-display text-sm font-bold text-brand-950 dark:text-white">
                       {activeRoom.title} ({activeRoom.room_code})
                     </h4>
-                    <p className="mt-0.5 text-xs text-slate-600 dark:text-zinc-300">
+                    <p className="mt-0.5 text-xs text-brand-600 dark:text-zinc-300">
                       Active for <strong>{activeRoom.department}</strong> (Year {activeRoom.year} • Sem {activeRoom.semester}). Complete early to avoid grade penalties!
                     </p>
                   </div>
                 </div>
 
                 <div className="shrink-0">
-                  <span className="inline-flex items-center gap-1 rounded-xl bg-amber-100 px-3 py-1.5 font-mono text-xs font-bold text-amber-900 dark:bg-amber-900/60 dark:text-amber-200">
+                  <span className="inline-flex items-center gap-1 rounded-xl bg-amber-100/90 px-3 py-1.5 font-mono text-xs font-bold text-amber-900 dark:bg-amber-900/60 dark:text-amber-200">
                     <Clock className="h-3.5 w-3.5" /> {activeRoom.duration_minutes} Mins
                   </span>
                 </div>
@@ -875,69 +981,69 @@ export function StudentPortal({
 
             {/* Student Dashboard Profile & Performance Cards */}
             <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <div className="rounded-2xl border border-slate-200/80 bg-slate-50 p-4 dark:border-zinc-800/80 dark:bg-zinc-950/60">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-zinc-500">
+              <div className="rounded-2xl border border-brand-200/80 bg-brand-50/60 p-4 dark:border-zinc-800/80 dark:bg-zinc-950/60">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-brand-400 dark:text-zinc-500">
                   Verified Candidate
                 </span>
-                <p className="mt-1 text-sm font-bold text-slate-900 dark:text-white">{activeStudent.name}</p>
-                <p className="font-mono text-xs text-slate-500 dark:text-zinc-400">SIN: {activeStudent.register_no}</p>
+                <p className="font-display mt-1 text-sm font-bold text-brand-950 dark:text-white">{activeStudent.name}</p>
+                <p className="font-mono text-xs font-semibold text-brand-500 dark:text-zinc-400">SIN: {activeStudent.register_no}</p>
               </div>
 
-              <div className="rounded-2xl border border-slate-200/80 bg-slate-50 p-4 dark:border-zinc-800/80 dark:bg-zinc-950/60">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-zinc-500">
+              <div className="rounded-2xl border border-brand-200/80 bg-brand-50/60 p-4 dark:border-zinc-800/80 dark:bg-zinc-950/60">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-brand-400 dark:text-zinc-500">
                   Department Roster
                 </span>
-                <p className="mt-1 text-sm font-bold text-slate-900 dark:text-white">{activeStudent.department || activeRoom.department}</p>
-                <p className="text-xs text-slate-500 dark:text-zinc-400">Year {activeStudent.year || activeRoom.year} • Sem {activeStudent.semester || activeRoom.semester}</p>
+                <p className="font-display mt-1 text-sm font-bold text-brand-950 dark:text-white">{activeStudent.department || activeRoom.department}</p>
+                <p className="text-xs font-medium text-brand-500 dark:text-zinc-400">Year {activeStudent.year || activeRoom.year} • Sem {activeStudent.semester || activeRoom.semester}</p>
               </div>
 
-              <div className="rounded-2xl border border-slate-200/80 bg-slate-50 p-4 dark:border-zinc-800/80 dark:bg-zinc-950/60">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-zinc-500">
+              <div className="rounded-2xl border border-brand-200/80 bg-brand-50/60 p-4 dark:border-zinc-800/80 dark:bg-zinc-950/60">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-brand-400 dark:text-zinc-500">
                   Score Record
                 </span>
-                <p className="mt-1 text-sm font-bold text-emerald-600 dark:text-emerald-400">
+                <p className="font-display mt-1 text-sm font-bold text-emerald-600 dark:text-emerald-400">
                   {activeStudent.score > 0 ? `${activeStudent.score}% Achieved` : 'Ready to Attempt'}
                 </p>
-                <p className="text-xs text-slate-500 dark:text-zinc-400">Status: {activeStudent.status === 'completed' ? 'Completed' : 'Enrolled'}</p>
+                <p className="text-xs font-medium text-brand-500 dark:text-zinc-400">Status: {activeStudent.status === 'completed' ? 'Completed' : 'Enrolled'}</p>
               </div>
             </div>
 
-            <div className="flex items-center justify-between border-b border-slate-100 pb-4 dark:border-zinc-800">
+            <div className="flex items-center justify-between border-b border-brand-100 pb-4 dark:border-zinc-800">
               <div>
                 <span className="inline-flex items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-300">
                   <CheckCircle2 className="h-3.5 w-3.5" /> Safe Exam Browser Verified
                 </span>
-                <h3 className="mt-2 text-lg font-bold text-slate-900 dark:text-white">
+                <h3 className="font-display mt-2 text-lg font-bold text-brand-950 dark:text-white">
                   {activeRoom.title}
                 </h3>
               </div>
-              <span className="font-mono text-xs font-bold text-slate-500 dark:text-zinc-400">
+              <span className="font-mono text-xs font-bold text-brand-500 dark:text-zinc-400">
                 Code: {activeRoom.room_code}
               </span>
             </div>
 
             {/* Terms & Rules Cards */}
             <div className="mt-5 space-y-3">
-              <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-4 text-xs dark:border-amber-900/60 dark:bg-amber-950/30">
-                <h4 className="flex items-center gap-1.5 font-bold text-amber-900 dark:text-amber-200">
-
-                  <AlertTriangle className="h-4 w-4 text-amber-600" /> Malpractice & Mark Deduction Policy
+              <div className="rounded-2xl border border-amber-200/80 bg-amber-50/70 p-4 text-xs dark:border-amber-900/60 dark:bg-amber-950/30">
+                <h4 className="font-display flex items-center gap-2 font-bold text-amber-950 dark:text-amber-200">
+                  <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                  <span>Malpractice &amp; Mark Deduction Policy</span>
                 </h4>
-                <p className="mt-1 text-[11px] text-amber-950 dark:text-amber-300/80">
+                <p className="mt-1.5 text-xs leading-relaxed text-amber-950/90 dark:text-amber-300/90">
                   The automated proctoring telemetry engine monitors tab switches, window minimization, and illegal shortcuts. <strong>Any detected malpractice will be logged and reported directly to department staff, resulting in mark deductions or exam disqualification.</strong>
                 </p>
               </div>
 
               {/* Mandatory 3 Checkboxes */}
-              <div className="space-y-2.5 rounded-2xl border border-slate-200/80 bg-slate-50/70 p-4 text-xs dark:border-zinc-800/80 dark:bg-zinc-950/50">
+              <div className="space-y-3 rounded-2xl border border-brand-200/80 bg-white p-4.5 text-xs dark:border-zinc-800/80 dark:bg-zinc-950/50">
                 <label className="flex items-start gap-3 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={chkIdentity}
                     onChange={(e) => setChkIdentity(e.target.checked)}
-                    className="mt-0.5 h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-400 dark:border-zinc-700 dark:bg-pitch-900"
+                    className="mt-0.5 h-4 w-4 rounded border-brand-300 text-brand-950 focus:ring-brand-500 dark:border-zinc-700 dark:bg-zinc-900"
                   />
-                  <span className="text-slate-700 dark:text-zinc-300">
+                  <span className="text-xs font-normal leading-relaxed text-brand-800 dark:text-zinc-300">
                     I confirm that I am the verified candidate (<strong>{activeStudent.name}</strong>) taking this examination under my own identity.
                   </span>
                 </label>
@@ -947,9 +1053,9 @@ export function StudentPortal({
                     type="checkbox"
                     checked={chkMalpractice}
                     onChange={(e) => setChkMalpractice(e.target.checked)}
-                    className="mt-0.5 h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-400 dark:border-zinc-700 dark:bg-pitch-900"
+                    className="mt-0.5 h-4 w-4 rounded border-brand-300 text-brand-950 focus:ring-brand-500 dark:border-zinc-700 dark:bg-zinc-900"
                   />
-                  <span className="text-slate-700 dark:text-zinc-300">
+                  <span className="text-xs font-normal leading-relaxed text-brand-800 dark:text-zinc-300">
                     I understand that tab switching, window minimization, or copying will log warnings and staff will reduce my marks accordingly.
                   </span>
                 </label>
@@ -959,26 +1065,22 @@ export function StudentPortal({
                     type="checkbox"
                     checked={chkTime}
                     onChange={(e) => setChkTime(e.target.checked)}
-                    className="mt-0.5 h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-400 dark:border-zinc-700 dark:bg-pitch-900"
+                    className="mt-0.5 h-4 w-4 rounded border-brand-300 text-brand-950 focus:ring-brand-500 dark:border-zinc-700 dark:bg-zinc-900"
                   />
-                  <span className="text-slate-700 dark:text-zinc-300">
+                  <span className="text-xs font-normal leading-relaxed text-brand-800 dark:text-zinc-300">
                     I agree to complete and submit all question responses within the allocated duration of <strong>{activeRoom.duration_minutes} minutes</strong>.
                   </span>
                 </label>
               </div>
             </div>
 
-            <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-t border-slate-100 pt-4 dark:border-zinc-800">
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-t border-brand-100 pt-4 dark:border-zinc-800">
               <button
-                onClick={() => {
-                  safeStorage.setItem('exora_session_stage', 'dashboard');
-                  setStage('dashboard');
-                }}
-                className="flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-white"
+                onClick={returnToDashboard}
+                className="flex items-center gap-1.5 text-xs font-semibold text-brand-500 transition hover:text-brand-950 dark:text-zinc-400 dark:hover:text-white"
               >
                 <ArrowLeft className="h-4 w-4" /> Back to Dashboard
               </button>
-
 
               <button
                 disabled={!(chkIdentity && chkMalpractice && chkTime)}
@@ -1000,12 +1102,11 @@ export function StudentPortal({
                     } catch (e) {}
                   }, 100);
                 }}
-                className="flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-xs font-bold text-white shadow-subtle transition hover:bg-slate-800 disabled:opacity-40 active:scale-[0.98] dark:bg-zinc-100 dark:text-black dark:hover:bg-zinc-200"
+                className="flex items-center justify-center gap-2 rounded-xl bg-brand-950 px-6 py-3.5 text-xs font-semibold uppercase tracking-wider text-white shadow-elevated transition hover:bg-brand-800 disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98] dark:bg-white dark:text-brand-950 dark:hover:bg-zinc-200"
               >
-                <Maximize2 className="h-4 w-4 text-emerald-400 dark:text-emerald-600" />
+                <Maximize2 className="h-4 w-4" />
                 <span>Start Examination (Enter Fullscreen)</span>
               </button>
-
             </div>
 
           </motion.div>
@@ -1045,11 +1146,7 @@ export function StudentPortal({
                   This exam room (<strong>{activeRoom.title}</strong>) does not have any questions assigned yet. Please inform your instructor or department admin to add questions to room <code>{activeRoom.room_code}</code>.
                 </p>
                 <button
-                  onClick={() => {
-                    setStage('verify');
-                    setActiveStudent(null);
-                    setActiveRoom(null);
-                  }}
+                  onClick={returnToDashboard}
                   className="mt-6 w-full rounded-xl bg-slate-900 py-3 text-xs font-bold text-white shadow-subtle transition hover:bg-slate-800 dark:bg-zinc-100 dark:text-black dark:hover:bg-zinc-200"
                 >
                   Return to Student Portal Login
@@ -1351,14 +1448,7 @@ export function StudentPortal({
             </div>
 
             <button
-              onClick={() => {
-                safeStorage.removeItem('exora_session_reg');
-                safeStorage.removeItem('exora_session_room');
-                safeStorage.removeItem('exora_session_stage');
-                setActiveStudent(null);
-                setActiveRoom(null);
-                setStage('dashboard');
-              }}
+              onClick={returnToDashboard}
               className="mt-6 w-full rounded-xl bg-brand-900 py-3 text-xs font-bold text-white shadow-subtle transition hover:bg-brand-800 dark:bg-white dark:text-brand-950 dark:hover:bg-zinc-200"
             >
               Return to Student Dashboard

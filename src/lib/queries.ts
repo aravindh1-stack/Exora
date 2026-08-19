@@ -38,6 +38,7 @@ export async function fetchStudentsWithSessions(): Promise<StudentWithSession[]>
       flag_reason: latest?.flag_reason ?? null,
       completed_at: latest?.completed_at ?? null,
       session_id: latest?.id ?? null,
+      room_id: latest?.room_id ?? null,
     };
   });
 }
@@ -72,7 +73,24 @@ export async function fetchStudentByRegisterNo(registerNo: string): Promise<Stud
     flag_reason: latest?.flag_reason ?? null,
     completed_at: latest?.completed_at ?? null,
     session_id: latest?.id ?? null,
+    room_id: latest?.room_id ?? null,
   };
+}
+
+export async function fetchAllSessionsForStudent(studentId: string): Promise<ExamSession[]> {
+  if (!studentId) return [];
+  try {
+    const { data, error } = await supabase
+      .from('exam_sessions')
+      .select('*')
+      .eq('student_id', studentId);
+
+    if (error || !data) return [];
+    return data;
+  } catch (err) {
+    console.error('Error fetching student sessions', err);
+    return [];
+  }
 }
 
 export type StudentInput = Omit<Student, 'id' | 'created_at'>;

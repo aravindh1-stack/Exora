@@ -54,6 +54,7 @@ export interface StudentWithSession extends Student {
   flag_reason: string | null;
   completed_at: string | null;
   session_id: string | null;
+  room_id?: string | null;
 }
 
 export type Section = 'dashboard' | 'rooms' | 'questions' | 'students';
