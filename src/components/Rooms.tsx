@@ -29,13 +29,14 @@ interface RoomsProps {
 }
 
 const DEPARTMENTS = [
-  'Computer Science',
-  'Information Technology',
-  'AI & Data Science',
-  'Electronics & Comm.',
-  'Electrical & Electronics',
-  'Mechanical Eng.',
-  'Civil Eng.',
+  'CSE',
+  'ECE',
+  'EEE',
+  'IT',
+  'MECH',
+  'CIVIL',
+  'AIDS',
+  'AIML',
 ];
 
 export function Rooms({

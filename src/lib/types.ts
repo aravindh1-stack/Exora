@@ -11,7 +11,7 @@ export interface Question {
   created_at: string;
 }
 
-export type StudentStatus = 'completed' | 'in_progress' | 'flagged';
+export type StudentStatus = 'completed' | 'in_progress' | 'flagged' | 'registered';
 
 export interface Student {
   id: string;

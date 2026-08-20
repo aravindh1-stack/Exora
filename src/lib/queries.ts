@@ -6,7 +6,9 @@ import type {
   Student,
   StudentWithSession,
   ExamRoom,
+  ExamSession,
 } from './types';
+import { normalizeDepartment } from './format';
 
 export async function fetchStudentsWithSessions(): Promise<StudentWithSession[]> {
   const { data: students, error: sErr } = await supabase
@@ -53,10 +55,12 @@ export async function fetchStudentsWithSessions(): Promise<StudentWithSession[]>
 
     return {
       ...s,
-      department: s.department ?? 'Computer Science',
+      department: s.department ?? 'General',
       year: Number(s.year) || 1,
       semester: Number(s.semester) || 1,
-      status: isFlagged ? 'flagged' : (latest?.status ?? s.status ?? 'in_progress'),
+      status: isFlagged
+        ? 'flagged'
+        : (latest?.status ?? (s.status && s.status !== 'in_progress' ? s.status : 'registered')),
       score: isFlagged ? 0 : (latest ? Number(latest.score) : 0),
       flag_reason: activeSession?.flag_reason ?? (s as any).flag_reason ?? (isFlagged ? 'Proctoring integrity violation' : null),
       completed_at: activeSession?.completed_at ?? latest?.completed_at ?? null,
@@ -140,7 +144,7 @@ export async function bulkUpsertStudents(studentsList: StudentInput[]): Promise<
     register_no: s.register_no.trim(),
     name: s.name.trim(),
     email: s.email ? s.email.trim() : null,
-    department: s.department ? s.department.trim() : 'Computer Science',
+    department: s.department ? s.department.trim() : 'General',
     year: Number(s.year) || 1,
     semester: Number(s.semester) || 1,
   }));
@@ -378,8 +382,8 @@ export async function logProctoringIncident(input: {
 }
 
 export function matchStudentToRoom(student: StudentWithSession, room: ExamRoom): boolean {
-  const sDept = (student.department || 'Computer Science').toLowerCase().trim();
-  const rDept = (room.department || '').toLowerCase().trim();
+  const sDept = normalizeDepartment(student.department).toLowerCase();
+  const rDept = normalizeDepartment(room.department).toLowerCase();
   const sYr = Number(student.year) || 1;
   const rYr = Number(room.year);
   const sSem = Number(student.semester) || 1;

@@ -38,3 +38,30 @@ export function avatarGradient(seed: string): string {
   }
   return AVATAR_GRADIENTS[Math.abs(hash) % AVATAR_GRADIENTS.length];
 }
+
+export const DEPARTMENTS_LIST = [
+  'CSE',
+  'ECE',
+  'EEE',
+  'IT',
+  'MECH',
+  'CIVIL',
+  'AIDS',
+  'AIML',
+];
+
+export function normalizeDepartment(dept: string | null | undefined): string {
+  if (!dept) return 'CSE';
+  const clean = dept.trim().toUpperCase();
+
+  if (clean.includes('CSE') || clean.includes('COMPUTER') || clean.includes('COMP')) return 'CSE';
+  if (clean.includes('ECE') || clean.includes('ELECTRONIC') || clean.includes('COMM')) return 'ECE';
+  if (clean.includes('EEE') || clean.includes('ELECTRICAL')) return 'EEE';
+  if (clean.includes('IT') || clean.includes('INFO') || clean.includes('INFORMATION')) return 'IT';
+  if (clean.includes('MECH') || clean.includes('MECHANICAL')) return 'MECH';
+  if (clean.includes('CIVIL')) return 'CIVIL';
+  if (clean.includes('AIDS') || clean.includes('DATA SCIENCE')) return 'AIDS';
+  if (clean.includes('AIML') || clean.includes('MACHINE LEARNING')) return 'AIML';
+
+  return clean;
+}

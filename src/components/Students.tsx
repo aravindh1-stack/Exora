@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 import type { StudentWithSession, StudentStatus, ExamRoom } from '@/lib/types';
 import { Skeleton, Spinner } from './ui';
-import { formatTimeAgo, initials } from '@/lib/format';
+import { formatTimeAgo, initials, normalizeDepartment } from '@/lib/format';
 import { createStudent, bulkUpsertStudents, deleteStudent, fetchStudentResponses, type StudentInput, type ExamResponseDetail } from '@/lib/queries';
 
 
@@ -38,6 +38,13 @@ const STATUS_CONFIG: Record<
   StudentStatus,
   { label: string; icon: typeof Flag; dot: string; badge: string; text: string }
 > = {
+  registered: {
+    label: 'Registered',
+    icon: GraduationCap,
+    dot: 'bg-slate-400',
+    badge: 'bg-slate-50 border-slate-200 dark:bg-zinc-900/60 dark:border-zinc-800',
+    text: 'text-slate-600 dark:text-zinc-400',
+  },
   completed: {
     label: 'Completed',
     icon: CheckCircle2,
@@ -64,13 +71,14 @@ const STATUS_CONFIG: Record<
 type FilterKey = 'all' | StudentStatus;
 
 const DEPARTMENTS = [
-  'Computer Science',
-  'Information Technology',
-  'AI & Data Science',
-  'Electronics & Comm.',
-  'Electrical & Electronics',
-  'Mechanical Eng.',
-  'Civil Eng.',
+  'CSE',
+  'ECE',
+  'EEE',
+  'IT',
+  'MECH',
+  'CIVIL',
+  'AIDS',
+  'AIML',
 ];
 
 export function Students({ students, rooms = [], loading, onReload }: StudentsProps) {
@@ -95,8 +103,9 @@ export function Students({ students, rooms = [], loading, onReload }: StudentsPr
   const counts = useMemo(
     () => ({
       all: students.length,
-      completed: students.filter((s) => s.status === 'completed').length,
+      registered: students.filter((s) => s.status === 'registered' || !s.status).length,
       in_progress: students.filter((s) => s.status === 'in_progress').length,
+      completed: students.filter((s) => s.status === 'completed').length,
       flagged: students.filter((s) => s.status === 'flagged').length,
     }),
     [students],
@@ -104,8 +113,9 @@ export function Students({ students, rooms = [], loading, onReload }: StudentsPr
 
   const filters: { key: FilterKey; label: string; count: number }[] = [
     { key: 'all', label: 'All Students', count: counts.all },
-    { key: 'completed', label: 'Completed', count: counts.completed },
+    { key: 'registered', label: 'Registered', count: counts.registered },
     { key: 'in_progress', label: 'In Progress', count: counts.in_progress },
+    { key: 'completed', label: 'Completed', count: counts.completed },
     { key: 'flagged', label: 'Flagged', count: counts.flagged },
   ];
 
@@ -693,23 +703,14 @@ function BulkUploadModal({
     const items: StudentInput[] = [];
 
     let nameIdx = headers.findIndex((h) => h.includes('name'));
-    let regIdx = headers.findIndex((h) => h.includes('sin') || h.includes('reg') || h.includes('roll') || h.includes('register'));
+    let regIdx = headers.findIndex((h) => h.includes('reg') || h.includes('sin') || h.includes('roll') || h.includes('id') || h.includes('no'));
     let emailIdx = headers.findIndex((h) => h.includes('email') || h.includes('mail'));
-    let deptIdx = headers.findIndex((h) => h.includes('dept') || h.includes('department') || h.includes('branch'));
+    let deptIdx = headers.findIndex((h) => h.includes('dept') || h.includes('department') || h.includes('branch') || h.includes('course') || h.includes('stream'));
     let yearIdx = headers.findIndex((h) => h.includes('year') || h.includes('yr'));
     let semIdx = headers.findIndex((h) => h.includes('sem') || h.includes('semester'));
 
-    if (!isHeaderRow) {
-      nameIdx = 0;
-      regIdx = 1;
-      emailIdx = 2;
-      deptIdx = 3;
-      yearIdx = 4;
-      semIdx = 5;
-    } else {
-      if (nameIdx === -1) nameIdx = 0;
-      if (regIdx === -1) regIdx = 1;
-    }
+    if (nameIdx === -1) nameIdx = 0;
+    if (regIdx === -1) regIdx = 1;
 
     for (let i = startIndex; i < lines.length; i++) {
       const cols = lines[i].split(delimiter).map((c) => c.trim().replace(/^['"]|['"]$/g, ''));
@@ -717,8 +718,18 @@ function BulkUploadModal({
 
       const name = cols[nameIdx] || cols[0] || '';
       const reg = cols[regIdx] || cols[1] || '';
-      const email = emailIdx !== -1 ? cols[emailIdx] : '';
-      const dept = deptIdx !== -1 ? cols[deptIdx] : 'Computer Science';
+
+      // Preserve EXACT department text from CSV column without forcing/overriding
+      let department = '';
+      if (deptIdx !== -1 && cols[deptIdx]) {
+        department = cols[deptIdx];
+      } else if (cols.length >= 4 && cols[3] && !cols[3].includes('@')) {
+        department = cols[3];
+      } else if (cols.length >= 3 && cols[2] && !cols[2].includes('@')) {
+        department = cols[2];
+      }
+
+      const email = emailIdx !== -1 && cols[emailIdx] ? cols[emailIdx] : `${reg.toLowerCase()}@student.sscet.ac.in`;
       const yr = yearIdx !== -1 ? Number(cols[yearIdx]) || 1 : 1;
       const sem = semIdx !== -1 ? Number(cols[semIdx]) || 1 : 1;
 
@@ -726,8 +737,8 @@ function BulkUploadModal({
         items.push({
           name,
           register_no: reg,
-          email: email || `${reg.toLowerCase()}@student.sscet.ac.in`,
-          department: dept || 'Computer Science',
+          email,
+          department: department.trim() || 'General',
           year: yr,
           semester: sem,
         });
