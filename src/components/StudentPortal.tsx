@@ -176,10 +176,10 @@ export function StudentPortal({
     return ua.includes('seb') || ua.includes('safeexambrowser') || forceBypass || true;
   }, []);
 
-  // Helper for strict room-based question filtering
+  // Helper for strict room-based question filtering (Returns empty list if 0 questions assigned to room)
   const getRoomQuestionsStrict = useCallback((allQuestions: Question[], room: ExamRoom) => {
     if (!allQuestions || allQuestions.length === 0) {
-      return { list: DEFAULT_FALLBACK_QUESTIONS, isFallback: true };
+      return { list: [], isFallback: false };
     }
 
     const normRoomId = (room.id || '').toLowerCase();
@@ -201,8 +201,9 @@ export function StudentPortal({
       });
     }
 
+    // STRICT FIX: If 0 questions assigned to this specific room, return empty list!
     if (filtered.length === 0) {
-      return { list: DEFAULT_FALLBACK_QUESTIONS, isFallback: true };
+      return { list: [], isFallback: false };
     }
 
     return { list: filtered, isFallback: false };
@@ -397,16 +398,18 @@ export function StudentPortal({
           }
         });
 
-        const pct =
-          roomQuestions.length > 0
-            ? Math.round((correctCount / roomQuestions.length) * 100)
-            : 0;
-
         const isFlagged = forceFlagged || warningsCount >= 2;
         const status = isFlagged ? 'flagged' : 'completed';
         const flagReason = isFlagged
           ? `Malpractice: Switched tabs/minimized window ${warningsCount > 0 ? warningsCount : 2} times`
           : undefined;
+
+        // STRICT FIX: Malpractice flagged sessions automatically receive 0% score
+        const pct = isFlagged
+          ? 0
+          : (roomQuestions.length > 0
+            ? Math.round((correctCount / roomQuestions.length) * 100)
+            : 0);
 
         await submitExamSession({
           student_id: activeStudent.id,
@@ -947,22 +950,32 @@ export function StudentPortal({
               )}
 
               {!currentQ ? (
-                <div className="panel-card mx-auto max-w-md rounded-2xl p-6 text-center sm:p-8">
-                  <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-50 text-amber-600 dark:bg-amber-950/50 dark:text-amber-400">
-                    <AlertCircle className="h-7 w-7" />
+                <div className="panel-card mx-auto max-w-lg rounded-3xl border border-slate-200/80 bg-white p-8 text-center shadow-lg dark:border-zinc-800 dark:bg-[#0c0d10]">
+                  <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-600 dark:bg-amber-950/50 dark:text-amber-400">
+                    <AlertCircle className="h-8 w-8" />
                   </div>
-                  <h3 className="mt-4 text-lg font-bold text-slate-900 dark:text-white">
-                    No Questions Assigned
+                  <h3 className="mt-5 font-display text-xl font-bold text-slate-900 dark:text-white">
+                    No Questions Found for This Room
                   </h3>
-                  <p className="mt-1.5 text-xs text-slate-500 dark:text-zinc-400">
-                    This exam room (<strong>{activeRoom.title}</strong>) does not have any active questions assigned yet.
+                  <p className="mt-2 text-xs sm:text-sm leading-relaxed text-slate-500 dark:text-zinc-400">
+                    No active questions have been added to room <strong className="font-mono text-emerald-600 dark:text-emerald-400">#{activeRoom.room_code}</strong> (<strong>{activeRoom.title}</strong>) yet. Please contact your department staff / invigilator or try refreshing the portal.
                   </p>
-                  <button
-                    onClick={returnToDashboard}
-                    className="mt-6 w-full rounded-xl bg-slate-900 py-3 text-xs font-bold text-white shadow-subtle transition hover:bg-slate-800 dark:bg-zinc-100 dark:text-black dark:hover:bg-zinc-200 cursor-pointer"
-                  >
-                    Return to Dashboard
-                  </button>
+                  <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-center">
+                    <button
+                      onClick={() => window.location.reload()}
+                      className="flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-xs font-bold text-white shadow-subtle transition hover:bg-slate-800 dark:bg-white dark:text-slate-950 dark:hover:bg-zinc-200 cursor-pointer"
+                    >
+                      <RotateCcw className="h-4 w-4" />
+                      <span>Refresh Question Repository</span>
+                    </button>
+                    <button
+                      onClick={returnToDashboard}
+                      className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 text-xs font-bold text-slate-700 shadow-xs transition hover:bg-slate-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800 cursor-pointer"
+                    >
+                      <ArrowLeft className="h-4 w-4" />
+                      <span>Return to Dashboard</span>
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">

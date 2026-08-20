@@ -240,6 +240,20 @@ export async function submitExamSession(input: {
 
   if (sErr) throw sErr;
 
+  // Sync status, score, and flag_reason directly to students table for real-time admin visibility
+  try {
+    await supabase
+      .from('students')
+      .update({
+        status: input.status,
+        score: input.score,
+        flag_reason: input.flag_reason || null,
+      })
+      .eq('id', input.student_id);
+  } catch (err) {
+    console.warn('Could not update students table status directly:', err);
+  }
+
   if (input.answers.length > 0 && session) {
     const responses = input.answers.map((a) => ({
       session_id: session.id,

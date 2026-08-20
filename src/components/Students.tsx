@@ -49,11 +49,11 @@ const STATUS_CONFIG: Record<
     text: 'text-amber-700 dark:text-amber-300',
   },
   flagged: {
-    label: 'Flagged',
+    label: 'FLAGGED',
     icon: Flag,
-    dot: 'bg-rose-500',
-    badge: 'bg-rose-50 border-rose-200 dark:bg-rose-950/40 dark:border-rose-800/60',
-    text: 'text-rose-700 dark:text-rose-300',
+    dot: 'bg-rose-600',
+    badge: 'bg-rose-600 border-rose-600 text-white shadow-xs',
+    text: 'text-white font-bold',
   },
 };
 
