@@ -17,11 +17,14 @@ import {
   Trash2,
   FileText,
   XCircle,
+  UploadCloud,
+  FileSpreadsheet,
+  Download,
 } from 'lucide-react';
 import type { StudentWithSession, StudentStatus, ExamRoom } from '@/lib/types';
 import { Skeleton, Spinner } from './ui';
 import { formatTimeAgo, initials } from '@/lib/format';
-import { createStudent, deleteStudent, fetchStudentResponses, type StudentInput, type ExamResponseDetail } from '@/lib/queries';
+import { createStudent, bulkUpsertStudents, deleteStudent, fetchStudentResponses, type StudentInput, type ExamResponseDetail } from '@/lib/queries';
 
 
 interface StudentsProps {
@@ -75,6 +78,7 @@ export function Students({ students, rooms = [], loading, onReload }: StudentsPr
   const [filter, setFilter] = useState<FilterKey>('all');
   const [selected, setSelected] = useState<StudentWithSession | null>(null);
   const [addModalOpen, setAddModalOpen] = useState(false);
+  const [bulkModalOpen, setBulkModalOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
@@ -132,13 +136,22 @@ export function Students({ students, rooms = [], loading, onReload }: StudentsPr
             Manage academic profiles, current year/sem status, and live exam proctoring.
           </p>
         </div>
-        <button
-          onClick={() => setAddModalOpen(true)}
-          className="flex items-center gap-1.5 rounded-lg bg-slate-900 px-3.5 py-2 text-xs font-semibold text-white shadow-subtle transition hover:bg-slate-800 active:scale-[0.98] dark:bg-zinc-100 dark:text-black dark:hover:bg-zinc-200"
-        >
-          <UserPlus className="h-4 w-4" strokeWidth={2} />
-          Add Student
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setBulkModalOpen(true)}
+            className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-xs transition hover:bg-slate-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800 cursor-pointer"
+          >
+            <UploadCloud className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+            <span>Bulk Upload CSV</span>
+          </button>
+          <button
+            onClick={() => setAddModalOpen(true)}
+            className="flex items-center gap-1.5 rounded-lg bg-slate-900 px-3.5 py-2 text-xs font-semibold text-white shadow-subtle transition hover:bg-slate-800 active:scale-[0.98] dark:bg-zinc-100 dark:text-black dark:hover:bg-zinc-200 cursor-pointer"
+          >
+            <UserPlus className="h-4 w-4" strokeWidth={2} />
+            <span>Add Student</span>
+          </button>
+        </div>
       </motion.div>
 
       {/* Filter Tabs & Search Bar */}
@@ -341,8 +354,21 @@ export function Students({ students, rooms = [], loading, onReload }: StudentsPr
         {addModalOpen && (
           <AddStudentModal
             onClose={() => setAddModalOpen(false)}
-            onReload={() => {
+            onCreated={() => {
               setAddModalOpen(false);
+              onReload?.();
+            }}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Bulk Upload CSV Modal */}
+      <AnimatePresence>
+        {bulkModalOpen && (
+          <BulkUploadModal
+            onClose={() => setBulkModalOpen(false)}
+            onSuccess={() => {
+              setBulkModalOpen(false);
               onReload?.();
             }}
           />
@@ -618,6 +644,323 @@ function AddStudentModal({
               <>
                 <Check className="h-3.5 w-3.5" strokeWidth={2.5} />
                 Register Student
+              </>
+            )}
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+function BulkUploadModal({
+  onClose,
+  onSuccess,
+}: {
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [file, setFile] = useState<File | null>(null);
+  const [rawText, setRawText] = useState('');
+  const [activeTab, setActiveTab] = useState<'file' | 'paste'>('file');
+  const [parsed, setParsed] = useState<StudentInput[]>([]);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+
+  function parseContent(content: string) {
+    setErrorMsg(null);
+    const lines = content
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter(Boolean);
+
+    if (lines.length === 0) {
+      setParsed([]);
+      return;
+    }
+
+    const firstLine = lines[0];
+    let delimiter = ',';
+    if (firstLine.includes('\t')) delimiter = '\t';
+    else if (firstLine.includes(';') && !firstLine.includes(',')) delimiter = ';';
+
+    const headers = firstLine.split(delimiter).map((h) => h.toLowerCase().trim().replace(/['"]/g, ''));
+    const isHeaderRow = headers.some((h) =>
+      ['name', 'register_no', 'sin', 'reg_no', 'email', 'department', 'dept', 'year', 'semester', 'sem'].includes(h)
+    );
+
+    const startIndex = isHeaderRow ? 1 : 0;
+    const items: StudentInput[] = [];
+
+    let nameIdx = headers.findIndex((h) => h.includes('name'));
+    let regIdx = headers.findIndex((h) => h.includes('sin') || h.includes('reg') || h.includes('roll') || h.includes('register'));
+    let emailIdx = headers.findIndex((h) => h.includes('email') || h.includes('mail'));
+    let deptIdx = headers.findIndex((h) => h.includes('dept') || h.includes('department') || h.includes('branch'));
+    let yearIdx = headers.findIndex((h) => h.includes('year') || h.includes('yr'));
+    let semIdx = headers.findIndex((h) => h.includes('sem') || h.includes('semester'));
+
+    if (!isHeaderRow) {
+      nameIdx = 0;
+      regIdx = 1;
+      emailIdx = 2;
+      deptIdx = 3;
+      yearIdx = 4;
+      semIdx = 5;
+    } else {
+      if (nameIdx === -1) nameIdx = 0;
+      if (regIdx === -1) regIdx = 1;
+    }
+
+    for (let i = startIndex; i < lines.length; i++) {
+      const cols = lines[i].split(delimiter).map((c) => c.trim().replace(/^['"]|['"]$/g, ''));
+      if (cols.length < 2) continue;
+
+      const name = cols[nameIdx] || cols[0] || '';
+      const reg = cols[regIdx] || cols[1] || '';
+      const email = emailIdx !== -1 ? cols[emailIdx] : '';
+      const dept = deptIdx !== -1 ? cols[deptIdx] : 'Computer Science';
+      const yr = yearIdx !== -1 ? Number(cols[yearIdx]) || 1 : 1;
+      const sem = semIdx !== -1 ? Number(cols[semIdx]) || 1 : 1;
+
+      if (name && reg) {
+        items.push({
+          name,
+          register_no: reg,
+          email: email || `${reg.toLowerCase()}@student.sscet.ac.in`,
+          department: dept || 'Computer Science',
+          year: yr,
+          semester: sem,
+        });
+      }
+    }
+
+    if (items.length === 0) {
+      setErrorMsg('Could not parse any valid student records. Please verify columns contain Name and SIN/Register No.');
+    }
+    setParsed(items);
+  }
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    setFile(f);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      parseContent(text);
+    };
+    reader.readAsText(f);
+  }
+
+  function handleDownloadSample() {
+    const csvContent = `Name,Register No,Email,Department,Year,Semester
+Ananya Roy,REG2026004,ananya.roy@sscet.ac.in,Computer Science,1,1
+Meera Joshi,REG2026009,meera.joshi@sscet.ac.in,Computer Science,1,1
+Rahul Verma,REG2026010,rahul.verma@sscet.ac.in,Electronics & Communication,2,3
+Kavya Sharma,REG2026011,kavya.sharma@sscet.ac.in,Electrical Eng.,3,5`;
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'Exora_Students_Sample_Template.csv';
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function handleUpload() {
+    if (parsed.length === 0) return;
+    setUploading(true);
+    setErrorMsg(null);
+    try {
+      await bulkUpsertStudents(parsed);
+      onSuccess();
+      onClose();
+    } catch (e: any) {
+      console.error(e);
+      setErrorMsg(e.message || 'Failed to bulk upload students to database.');
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs font-sans"
+    >
+      <motion.div
+        initial={{ scale: 0.95, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.95, opacity: 0 }}
+        className="w-full max-w-2xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-900"
+      >
+        <div className="flex items-center justify-between border-b border-slate-100 p-5 dark:border-zinc-800">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400">
+              <UploadCloud className="h-5 w-5" />
+            </div>
+            <div>
+              <h3 className="font-display text-base font-bold text-slate-900 dark:text-white">
+                Bulk Upload Students (CSV / Google Sheets)
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-zinc-400">
+                Import 60+ candidates at once using CSV or copied table text.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-200 cursor-pointer"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="p-6 space-y-5 max-h-[75vh] overflow-y-auto">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 rounded-lg bg-slate-100 p-1 dark:bg-zinc-800">
+              <button
+                onClick={() => setActiveTab('file')}
+                className={`rounded-md px-3 py-1 text-xs font-semibold transition cursor-pointer ${
+                  activeTab === 'file'
+                    ? 'bg-white text-slate-900 shadow-xs dark:bg-zinc-700 dark:text-white'
+                    : 'text-slate-500 dark:text-zinc-400'
+                }`}
+              >
+                Upload .CSV File
+              </button>
+              <button
+                onClick={() => setActiveTab('paste')}
+                className={`rounded-md px-3 py-1 text-xs font-semibold transition cursor-pointer ${
+                  activeTab === 'paste'
+                    ? 'bg-white text-slate-900 shadow-xs dark:bg-zinc-700 dark:text-white'
+                    : 'text-slate-500 dark:text-zinc-400'
+                }`}
+              >
+                Paste Table Text
+              </button>
+            </div>
+
+            <button
+              onClick={handleDownloadSample}
+              className="flex items-center gap-1.5 text-xs font-bold text-emerald-600 hover:underline dark:text-emerald-400 cursor-pointer"
+            >
+              <Download className="h-3.5 w-3.5" />
+              Download Sample CSV
+            </button>
+          </div>
+
+          {activeTab === 'file' ? (
+            <label className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50/50 p-8 text-center transition hover:bg-slate-100/50 dark:border-zinc-700 dark:bg-zinc-950/40 dark:hover:bg-zinc-900/60 cursor-pointer">
+              <FileSpreadsheet className="h-10 w-10 text-emerald-500 mb-2" />
+              <span className="text-xs font-bold text-slate-800 dark:text-zinc-200">
+                {file ? file.name : 'Click or Drag & Drop Google Sheet CSV file here'}
+              </span>
+              <span className="mt-1 text-[11px] text-slate-400 dark:text-zinc-500">
+                Accepts .csv or .txt files exported from Google Sheets / Excel
+              </span>
+              <input
+                type="file"
+                accept=".csv, .txt, text/csv, text/plain"
+                onChange={handleFileChange}
+                className="hidden"
+              />
+            </label>
+          ) : (
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
+                Paste copied rows directly from Google Sheets / Excel:
+              </label>
+              <textarea
+                rows={5}
+                value={rawText}
+                onChange={(e) => {
+                  setRawText(e.target.value);
+                  parseContent(e.target.value);
+                }}
+                placeholder={`Name\tRegister No\tEmail\tDepartment\tYear\tSemester\nAnanya Roy\tREG2026004\tananya@sscet.ac.in\tComputer Science\t1\t1`}
+                className="w-full rounded-xl border border-slate-200 bg-white p-3 font-mono text-xs text-slate-900 placeholder:text-slate-400 outline-none focus:border-emerald-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-white"
+              />
+            </div>
+          )}
+
+          {errorMsg && (
+            <div className="flex items-center gap-2 rounded-xl bg-rose-50 border border-rose-200 p-3 text-xs text-rose-700 dark:bg-rose-950/50 dark:border-rose-900 dark:text-rose-300">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <span>{errorMsg}</span>
+            </div>
+          )}
+
+          {parsed.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-extrabold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">
+                  ✓ {parsed.length} Candidates Ready to Import
+                </span>
+                <span className="text-[11px] text-slate-400 dark:text-zinc-500">
+                  Duplicates will be updated automatically
+                </span>
+              </div>
+
+              <div className="max-h-48 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50/50 dark:border-zinc-800 dark:bg-zinc-950/60">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-100 text-slate-500 dark:bg-zinc-900 dark:text-zinc-400 font-semibold sticky top-0">
+                    <tr>
+                      <th className="p-2.5">Name</th>
+                      <th className="p-2.5">SIN / Reg No</th>
+                      <th className="p-2.5">Department</th>
+                      <th className="p-2.5">Yr/Sem</th>
+                      <th className="p-2.5">Email</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200/60 dark:divide-zinc-800/60 text-slate-800 dark:text-zinc-200">
+                    {parsed.slice(0, 50).map((p, idx) => (
+                      <tr key={idx}>
+                        <td className="p-2.5 font-bold">{p.name}</td>
+                        <td className="p-2.5 font-mono text-emerald-600 dark:text-emerald-400">{p.register_no}</td>
+                        <td className="p-2.5">{p.department}</td>
+                        <td className="p-2.5">Y{p.year} / S{p.semester}</td>
+                        <td className="p-2.5 text-slate-500 dark:text-zinc-400">{p.email || '—'}</td>
+                      </tr>
+                    ))}
+                    {parsed.length > 50 && (
+                      <tr>
+                        <td colSpan={5} className="p-2.5 text-center text-xs font-semibold text-slate-500 dark:text-zinc-400">
+                          + {parsed.length - 50} more candidates in queue...
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center justify-end gap-3 border-t border-slate-100 p-5 dark:border-zinc-800 bg-slate-50/50 dark:bg-zinc-950/50">
+          <button
+            onClick={onClose}
+            className="rounded-xl px-4 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-200 dark:text-zinc-400 dark:hover:bg-zinc-800 cursor-pointer"
+          >
+            Cancel
+          </button>
+          <button
+            disabled={parsed.length === 0 || uploading}
+            onClick={handleUpload}
+            className="flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-xs font-bold text-white shadow-md transition hover:bg-emerald-700 disabled:opacity-50 dark:bg-emerald-500 dark:hover:bg-emerald-600 cursor-pointer"
+          >
+            {uploading ? (
+              <>
+                <Spinner className="h-4 w-4 text-white" />
+                <span>Importing {parsed.length} Candidates...</span>
+              </>
+            ) : (
+              <>
+                <UploadCloud className="h-4 w-4" />
+                <span>Import All {parsed.length} Students</span>
               </>
             )}
           </button>

@@ -134,6 +134,29 @@ export async function createStudent(input: StudentInput): Promise<Student> {
   return data;
 }
 
+export async function bulkUpsertStudents(studentsList: StudentInput[]): Promise<Student[]> {
+  if (!studentsList || studentsList.length === 0) return [];
+  const payload = studentsList.map((s) => ({
+    register_no: s.register_no.trim(),
+    name: s.name.trim(),
+    email: s.email ? s.email.trim() : null,
+    department: s.department ? s.department.trim() : 'Computer Science',
+    year: Number(s.year) || 1,
+    semester: Number(s.semester) || 1,
+  }));
+
+  const { data, error } = await supabase
+    .from('students')
+    .upsert(payload, { onConflict: 'register_no' })
+    .select();
+
+  if (error) {
+    console.error('Failed to bulk upsert students:', error);
+    throw error;
+  }
+  return data ?? [];
+}
+
 export async function deleteStudent(id: string): Promise<void> {
   const { error } = await supabase.from('students').delete().eq('id', id);
   if (error) throw error;
