@@ -101,7 +101,7 @@ export async function fetchStudentByRegisterNo(registerNo: string): Promise<Stud
 }
 
 export async function fetchAllSessionsForStudent(studentId: string): Promise<ExamSession[]> {
-  if (!studentId) return [];
+  if (!studentId || studentId === 'default-candidate') return [];
   try {
     const { data, error } = await supabase
       .from('exam_sessions')
@@ -111,7 +111,6 @@ export async function fetchAllSessionsForStudent(studentId: string): Promise<Exa
     if (error || !data) return [];
     return data;
   } catch (err) {
-    console.error('Error fetching student sessions', err);
     return [];
   }
 }

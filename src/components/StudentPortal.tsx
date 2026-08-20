@@ -23,6 +23,7 @@ import {
   Lock,
   FileText,
   Sparkles,
+  RotateCcw,
 } from 'lucide-react';
 import type { StudentWithSession, ExamRoom, Question } from '@/lib/types';
 import { submitExamSession, logProctoringIncident, getQuestionsForRoom } from '@/lib/queries';
@@ -170,11 +171,9 @@ export function StudentPortal({
 
   // Safe Exam Browser (SEB) Header Verification Check
   const isSEBVerified = useMemo(() => {
-    if (typeof window === 'undefined') return true;
+    if (typeof window === 'undefined') return false;
     const ua = (window.navigator?.userAgent || '').toLowerCase();
-    const searchParams = new URLSearchParams(window.location.search);
-    const forceBypass = searchParams.get('seb') === 'bypass' || searchParams.get('mode') === 'student';
-    return ua.includes('seb') || ua.includes('safeexambrowser') || forceBypass || true;
+    return ua.includes('seb') || ua.includes('safeexambrowser') || Boolean((window as any).SafeExamBrowser);
   }, []);
 
   // Helper for strict room-based question filtering (Single source of truth helper)
@@ -626,13 +625,56 @@ export function StudentPortal({
                     </div>
                   </div>
 
-                  <button
-                    onClick={returnToDashboard}
-                    className="flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-white cursor-pointer"
-                  >
-                    <ArrowLeft className="h-4 w-4" />
-                    <span>Back to Student Dashboard</span>
-                  </button>
+                  {/* SEB Access Control Action Buttons */}
+                  <div className="space-y-3 pt-2">
+                    <a
+                      href={`sebs://${window.location.host}${window.location.pathname}?reg=${activeStudent.register_no}&room=${activeRoom.room_code}&stage=terms`}
+                      className="flex w-full items-center justify-center gap-2.5 rounded-2xl bg-emerald-600 px-6 py-4 text-xs font-extrabold text-white shadow-lg transition hover:bg-emerald-700 active:scale-[0.98] dark:bg-emerald-500 dark:hover:bg-emerald-600 cursor-pointer"
+                    >
+                      <Zap className="h-4 w-4 fill-current" />
+                      <span>Launch in Safe Exam Browser (SEB)</span>
+                    </a>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const currentUrl = `${window.location.protocol}//${window.location.host}${window.location.pathname}?reg=${activeStudent.register_no}&room=${activeRoom.room_code}&stage=terms`;
+                        const sebConfigXml = `<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>startURL</key>
+    <string>${currentUrl}</string>
+    <key>sendBrowserExamKey</key>
+    <true/>
+    <key>allowQuit</key>
+    <true/>
+</dict>
+</plist>`;
+                        const blob = new Blob([sebConfigXml], { type: 'application/seb' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `Exora_Exam_${activeRoom.room_code}.seb`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                      }}
+                      className="flex w-full items-center justify-center gap-2.5 rounded-2xl border border-slate-200 bg-slate-50 px-6 py-3.5 text-xs font-bold text-slate-700 transition hover:bg-slate-100 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800 cursor-pointer"
+                    >
+                      <Download className="h-4 w-4" />
+                      <span>Download SEB Configuration File (.seb)</span>
+                    </button>
+
+                    <div className="flex items-center justify-start pt-2">
+                      <button
+                        onClick={returnToDashboard}
+                        className="flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-white cursor-pointer"
+                      >
+                        <ArrowLeft className="h-4 w-4" />
+                        <span>Back to Student Dashboard</span>
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
