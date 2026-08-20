@@ -14,12 +14,13 @@ import {
   Flag,
   X,
 } from 'lucide-react';
-import type { StudentWithSession, ExamRoom, ExamSession } from '@/lib/types';
+import type { StudentWithSession, ExamRoom, ExamSession, Question } from '@/lib/types';
 import { matchStudentToRoom, fetchAllSessionsForStudent } from '@/lib/queries';
 
 interface MyQuizzesProps {
   student: StudentWithSession;
   rooms: ExamRoom[];
+  questions?: Question[];
   onStartExam: (room: ExamRoom) => void;
   onViewAnswers: (room?: ExamRoom) => void;
 }
@@ -29,6 +30,7 @@ type FilterTab = 'all' | 'pending' | 'completed' | 'flagged';
 export function MyQuizzes({
   student,
   rooms,
+  questions = [],
   onStartExam,
   onViewAnswers,
 }: MyQuizzesProps) {
@@ -260,6 +262,23 @@ export function MyQuizzes({
                       <Clock className="h-3.5 w-3.5 text-brand-400 dark:text-zinc-500" />
                       <span>Target Duration: {room.duration_minutes} Mins</span>
                     </div>
+                  </div>
+
+                  {/* Front-Facing Question Count Badge */}
+                  <div className="mt-3.5 flex items-center justify-between rounded-xl border border-brand-100 bg-brand-50/50 p-2.5 dark:border-zinc-800/80 dark:bg-zinc-900/60 text-xs">
+                    <span className="flex items-center gap-1.5 font-bold text-brand-900 dark:text-zinc-200">
+                      <BookOpen className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                      Assigned Questions:
+                    </span>
+                    <span className="rounded-lg bg-emerald-50 px-2.5 py-0.5 font-mono text-xs font-extrabold text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
+                      {questions ? questions.filter((q) => {
+                        if (!q.room_id) return false;
+                        const normRoomId = (room.id || '').toLowerCase();
+                        const normRoomCode = (room.room_code || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+                        const qRoom = q.room_id.toLowerCase();
+                        return qRoom === normRoomId || q.room_id.toLowerCase().replace(/[^a-z0-9]/g, '') === normRoomCode;
+                      }).length : 0} Questions
+                    </span>
                   </div>
                 </div>
 

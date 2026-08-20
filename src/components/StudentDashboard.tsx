@@ -461,6 +461,7 @@ export function StudentDashboard({
             <MyQuizzes
               student={student}
               rooms={rooms}
+              questions={questions}
               onStartExam={onStartExam}
               onViewAnswers={handleOpenReviewModal}
             />
