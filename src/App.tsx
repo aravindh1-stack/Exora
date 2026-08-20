@@ -405,6 +405,7 @@ function App() {
                 {section === 'students' && (
                   <Students
                     students={students}
+                    rooms={rooms}
                     loading={loadingStudents}
                     onReload={loadStudents}
                   />

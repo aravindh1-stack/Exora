@@ -18,7 +18,7 @@ import {
   FileText,
   XCircle,
 } from 'lucide-react';
-import type { StudentWithSession, StudentStatus } from '@/lib/types';
+import type { StudentWithSession, StudentStatus, ExamRoom } from '@/lib/types';
 import { Skeleton, Spinner } from './ui';
 import { formatTimeAgo, initials } from '@/lib/format';
 import { createStudent, deleteStudent, fetchStudentResponses, type StudentInput, type ExamResponseDetail } from '@/lib/queries';
@@ -26,6 +26,7 @@ import { createStudent, deleteStudent, fetchStudentResponses, type StudentInput,
 
 interface StudentsProps {
   students: StudentWithSession[];
+  rooms?: ExamRoom[];
   loading: boolean;
   onReload?: () => void;
 }
@@ -69,7 +70,7 @@ const DEPARTMENTS = [
   'Civil Eng.',
 ];
 
-export function Students({ students, loading, onReload }: StudentsProps) {
+export function Students({ students, rooms = [], loading, onReload }: StudentsProps) {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<FilterKey>('all');
   const [selected, setSelected] = useState<StudentWithSession | null>(null);
@@ -140,32 +141,26 @@ export function Students({ students, loading, onReload }: StudentsProps) {
         </button>
       </motion.div>
 
+      {/* Filter Tabs & Search Bar */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-wrap items-center gap-1.5">
+        <div className="flex flex-wrap gap-1.5">
           {filters.map((f) => {
-            const isActive = filter === f.key;
-            const config =
-              f.key !== 'all' ? STATUS_CONFIG[f.key as StudentStatus] : null;
+            const active = filter === f.key;
             return (
               <button
                 key={f.key}
                 onClick={() => setFilter(f.key)}
-                className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
-                  isActive
-                    ? config
-                      ? `${config.badge} ${config.text}`
-                      : 'border-slate-300 bg-slate-900 text-white dark:border-zinc-700 dark:bg-zinc-100 dark:text-black'
-                    : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-zinc-800 dark:bg-pitch-900 dark:text-zinc-400 dark:hover:bg-zinc-800'
+                className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition ${
+                  active
+                    ? 'bg-slate-900 text-white shadow-xs dark:bg-zinc-100 dark:text-black'
+                    : 'bg-white text-slate-600 hover:bg-slate-50 dark:bg-pitch-900 dark:text-zinc-400 dark:hover:bg-zinc-800/80'
                 }`}
               >
-                {config && (
-                  <span className={`h-1.5 w-1.5 rounded-full ${config.dot}`} />
-                )}
-                {f.label}
+                <span>{f.label}</span>
                 <span
-                  className={`rounded-full px-1.5 py-0.2 text-[10px] ${
-                    isActive
-                      ? 'bg-slate-200/40 dark:bg-black/20'
+                  className={`rounded-full px-1.5 py-0.2 text-[10px] font-bold ${
+                    active
+                      ? 'bg-white/20 text-white dark:bg-black/20 dark:text-black'
                       : 'bg-slate-100 text-slate-500 dark:bg-zinc-800 dark:text-zinc-500'
                   }`}
                 >
@@ -359,6 +354,7 @@ export function Students({ students, loading, onReload }: StudentsProps) {
         {selected && (
           <StudentDetail
             student={selected}
+            rooms={rooms}
             onClose={() => setSelected(null)}
           />
         )}
@@ -633,14 +629,19 @@ function AddStudentModal({
 
 function StudentDetail({
   student,
+  rooms = [],
   onClose,
 }: {
   student: StudentWithSession;
+  rooms?: ExamRoom[];
   onClose: () => void;
 }) {
   const config = STATUS_CONFIG[student.status];
   const StatusIcon = config.icon;
   const isFlagged = student.status === 'flagged';
+  const matchedRoom = (rooms || []).find(
+    (r) => r.id === student.room_id || r.room_code === student.room_id,
+  );
 
   const [responses, setResponses] = useState<ExamResponseDetail[]>([]);
   const [loadingResponses, setLoadingResponses] = useState(false);
@@ -875,14 +876,38 @@ function StudentDetail({
               </div>
 
               {isFlagged && (
-                <div className="flex items-start gap-2.5 rounded-lg border border-rose-200 bg-rose-50 p-3 dark:border-rose-900/60 dark:bg-rose-950/40">
-                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-rose-600 dark:text-rose-400" />
-                  <div>
-                    <p className="text-xs font-semibold text-rose-800 dark:text-rose-300">
-                      Malpractice Flagged
-                    </p>
-                    <p className="mt-0.5 text-xs text-rose-700/90 dark:text-rose-200/80">
-                      {student.flag_reason ?? 'Flagged for review.'}
+                <div className="rounded-xl border border-rose-300 bg-rose-50/90 p-4 dark:border-rose-900/80 dark:bg-rose-950/60 space-y-2.5">
+                  <div className="flex items-center gap-2 text-xs font-bold text-rose-800 dark:text-rose-200">
+                    <AlertTriangle className="h-4 w-4 shrink-0 text-rose-600 dark:text-rose-400" />
+                    <span>PROCTORING MALPRACTICE INCIDENT LOGGED</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 text-xs font-medium text-slate-700 dark:text-zinc-300">
+                    <div className="rounded-lg bg-white/80 p-2.5 dark:bg-zinc-900/80">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-zinc-500">
+                        Exam Room Repository
+                      </span>
+                      <p className="mt-0.5 font-bold text-slate-900 dark:text-white truncate">
+                        {matchedRoom ? `${matchedRoom.title} (${matchedRoom.room_code})` : (student.room_id || 'Departmental Unit Test')}
+                      </p>
+                    </div>
+
+                    <div className="rounded-lg bg-white/80 p-2.5 dark:bg-zinc-900/80">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-zinc-500">
+                        Disqualification Status
+                      </span>
+                      <p className="mt-0.5 font-bold text-rose-700 dark:text-rose-400">
+                        0% Score Credit (Disqualified)
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="rounded-lg bg-white/80 p-2.5 dark:bg-zinc-900/80 text-xs">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-zinc-500">
+                      Violation Incident Reason
+                    </span>
+                    <p className="mt-0.5 font-semibold text-rose-900 dark:text-rose-300">
+                      {student.flag_reason || 'Window minimization / Tab switching exceeded maximum 2-warning limit.'}
                     </p>
                   </div>
                 </div>

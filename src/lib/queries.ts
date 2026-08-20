@@ -22,13 +22,35 @@ export async function fetchStudentsWithSessions(): Promise<StudentWithSession[]>
   if (eErr) throw eErr;
 
   const latestByStudent = new Map<string, (typeof sessions)[number]>();
+  const flaggedStudentKeys = new Set<string>();
+  const flaggedSessionByStudent = new Map<string, (typeof sessions)[number]>();
+
   for (const s of sessions ?? []) {
-    if (!latestByStudent.has(s.student_id)) latestByStudent.set(s.student_id, s);
+    if (s.student_id) {
+      const normKey = s.student_id.toLowerCase().trim();
+      if (!latestByStudent.has(normKey)) latestByStudent.set(normKey, s);
+
+      // Check if candidate was flagged in ANY exam room
+      if (s.status === 'flagged') {
+        flaggedStudentKeys.add(normKey);
+        if (!flaggedSessionByStudent.has(normKey)) {
+          flaggedSessionByStudent.set(normKey, s);
+        }
+      }
+    }
   }
 
   return (students ?? []).map((s: Student) => {
-    const latest = latestByStudent.get(s.id);
-    const isFlagged = s.status === 'flagged' || latest?.status === 'flagged';
+    const sIdKey = s.id ? s.id.toLowerCase().trim() : '';
+    const sRegKey = s.register_no ? s.register_no.toLowerCase().trim() : '';
+
+    const latest = latestByStudent.get(sIdKey) || latestByStudent.get(sRegKey);
+    const flaggedSession = flaggedSessionByStudent.get(sIdKey) || flaggedSessionByStudent.get(sRegKey);
+
+    // Candidate is FLAGGED if marked on student record OR flagged in ANY exam room repository session!
+    const isFlagged = s.status === 'flagged' || flaggedStudentKeys.has(sIdKey) || flaggedStudentKeys.has(sRegKey) || Boolean(flaggedSession);
+    const activeSession = isFlagged ? (flaggedSession || latest) : latest;
+
     return {
       ...s,
       department: s.department ?? 'Computer Science',
@@ -36,10 +58,10 @@ export async function fetchStudentsWithSessions(): Promise<StudentWithSession[]>
       semester: Number(s.semester) || 1,
       status: isFlagged ? 'flagged' : (latest?.status ?? s.status ?? 'in_progress'),
       score: isFlagged ? 0 : (latest ? Number(latest.score) : 0),
-      flag_reason: latest?.flag_reason ?? (s as any).flag_reason ?? (isFlagged ? 'Proctoring integrity violation' : null),
-      completed_at: latest?.completed_at ?? null,
-      session_id: latest?.id ?? null,
-      room_id: latest?.room_id ?? null,
+      flag_reason: activeSession?.flag_reason ?? (s as any).flag_reason ?? (isFlagged ? 'Proctoring integrity violation' : null),
+      completed_at: activeSession?.completed_at ?? latest?.completed_at ?? null,
+      session_id: activeSession?.id ?? latest?.id ?? null,
+      room_id: activeSession?.room_id ?? latest?.room_id ?? null,
     };
   });
 }
@@ -226,10 +248,59 @@ export async function submitExamSession(input: {
   flag_reason?: string;
   answers: { question_id: string; selected_index: number; is_correct: boolean }[];
 }) {
+  let targetStudentId = input.student_id;
+
+  // 1. Ensure student status & score are updated on students table
+  try {
+    const { data: existing } = await supabase
+      .from('students')
+      .select('id, register_no')
+      .or(`id.eq.${input.student_id},register_no.eq.${input.student_id}`)
+      .maybeSingle();
+
+    if (existing) {
+      targetStudentId = existing.id;
+      await supabase
+        .from('students')
+        .update({
+          status: input.status,
+          score: input.score,
+          flag_reason: input.flag_reason || null,
+        })
+        .eq('id', existing.id);
+    } else {
+      // Upsert new student record if testing with a new register number
+      const { data: newStu } = await supabase
+        .from('students')
+        .upsert(
+          {
+            register_no: input.student_id,
+            name: `Candidate ${input.student_id}`,
+            department: 'Computer Science',
+            year: 1,
+            semester: 1,
+            status: input.status,
+            score: input.score,
+            flag_reason: input.flag_reason || null,
+          },
+          { onConflict: 'register_no' }
+        )
+        .select()
+        .maybeSingle();
+
+      if (newStu) {
+        targetStudentId = newStu.id;
+      }
+    }
+  } catch (err) {
+    console.warn('Could not update/upsert students table record:', err);
+  }
+
+  // 2. Insert into exam_sessions
   const { data: session, error: sErr } = await supabase
     .from('exam_sessions')
     .insert({
-      student_id: input.student_id,
+      student_id: targetStudentId,
       room_id: input.room_id || null,
       score: input.score,
       status: input.status,
@@ -239,21 +310,7 @@ export async function submitExamSession(input: {
     .select()
     .single();
 
-  if (sErr) throw sErr;
-
-  // Sync status, score, and flag_reason directly to students table for real-time admin visibility
-  try {
-    await supabase
-      .from('students')
-      .update({
-        status: input.status,
-        score: input.score,
-        flag_reason: input.flag_reason || null,
-      })
-      .eq('id', input.student_id);
-  } catch (err) {
-    console.warn('Could not update students table status directly:', err);
-  }
+  if (sErr) console.error('Failed to insert exam_session:', sErr);
 
   if (input.answers.length > 0 && session) {
     const responses = input.answers.map((a) => ({
