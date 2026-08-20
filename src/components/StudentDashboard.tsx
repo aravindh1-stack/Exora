@@ -608,6 +608,27 @@ export function StudentDashboard({
                   );
                 })}
               </div>
+              {/* Malpractice Flagged Alert Notice */}
+              {student.status === 'flagged' && (
+                <div className="overflow-hidden rounded-2xl border border-rose-300 bg-rose-500/10 p-5 text-rose-900 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-200">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-rose-600 text-white shadow-subtle">
+                      <Flag className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-rose-700 dark:text-rose-400">
+                        Proctor Integrity Flag Alert
+                      </span>
+                      <h4 className="font-display text-sm font-bold text-rose-950 dark:text-rose-100">
+                        Exam Session Flagged for Malpractice
+                      </h4>
+                      <p className="text-xs text-rose-800/90 dark:text-rose-300/90 mt-0.5">
+                        Your latest examination session was automatically flagged for window minimization or tab switching violations. Department staff have been notified.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Dynamic Active Banner Workflow */}
               {hasPendingQuiz ? (

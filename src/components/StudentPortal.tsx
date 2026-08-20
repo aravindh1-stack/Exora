@@ -372,7 +372,7 @@ export function StudentPortal({
 
   // Submit Exam Handler
   const handleFinalSubmit = useCallback(
-    async (isAutoSubmit = false) => {
+    async (isAutoSubmit = false, forceFlagged = false) => {
       if (!activeStudent || !activeRoom || submitting) return;
 
       setSubmitting(true);
@@ -402,10 +402,10 @@ export function StudentPortal({
             ? Math.round((correctCount / roomQuestions.length) * 100)
             : 0;
 
-        const isFlagged = warningsCount >= 3;
+        const isFlagged = forceFlagged || warningsCount >= 2;
         const status = isFlagged ? 'flagged' : 'completed';
         const flagReason = isFlagged
-          ? `Malpractice: Switched tabs/minimized window ${warningsCount} times`
+          ? `Malpractice: Switched tabs/minimized window ${warningsCount > 0 ? warningsCount : 2} times`
           : undefined;
 
         await submitExamSession({
@@ -416,6 +416,8 @@ export function StudentPortal({
           flag_reason: flagReason,
           answers: answerPayload,
         });
+
+        setActiveStudent((prev) => (prev ? { ...prev, status, score: pct } : null));
 
         safeStorage.removeItem('exora_session_stage');
         safeStorage.removeItem('exora_session_reg');
@@ -443,7 +445,7 @@ export function StudentPortal({
     [activeStudent, activeRoom, roomQuestions, selectedAnswers, warningsCount, submitting, onExamSubmitted],
   );
 
-  // Tab-Switch Proctoring Telemetry Hook
+  // Tab-Switch Proctoring Telemetry Hook (STRICT 2 WARNINGS TOTAL)
   useEffect(() => {
     if (stage !== 'exam') return;
 
@@ -452,7 +454,7 @@ export function StudentPortal({
         setWarningsCount((prev) => {
           const next = prev + 1;
           if (next <= 2) {
-            const msg = `Security Alert (${next}/2): Tab switch or window minimization detected! Exceeding warnings will terminate exam session.`;
+            const msg = `Security Alert (Warning ${next}/2): Tab switch or window minimization detected! Maximum 2 warnings allowed.`;
             setWarningToast(msg);
 
             if (activeStudent && activeRoom) {
@@ -463,17 +465,17 @@ export function StudentPortal({
             }
             setTimeout(() => setWarningToast(null), 5000);
           } else {
-            const msg = `EXAM TERMINATED: Exceeded warnings limit! Session flagged for malpractice telemetry.`;
+            const msg = `EXAM TERMINATED: Exceeded 2 warnings limit! Session flagged for malpractice.`;
             setWarningToast(msg);
 
             if (activeStudent && activeRoom) {
               logProctoringIncident({
                 event_type: 'tab_switch_terminated',
-                details: `Student ${activeStudent.name} (${activeStudent.register_no}) exceeded warnings. Exam terminated.`,
+                details: `Student ${activeStudent.name} (${activeStudent.register_no}) exceeded 2 warnings. Exam terminated & FLAGGED.`,
               });
             }
             setTimeout(() => {
-              handleFinalSubmit(false);
+              handleFinalSubmit(false, true);
             }, 600);
           }
           return next;
@@ -913,144 +915,196 @@ export function StudentPortal({
           </motion.div>
         )}
 
-        {/* Stage 3: Live Exam Portal Workspace (3-Column Layout) */}
+        {/* Stage 3: Live Exam Portal Workspace (3-Column Perfectly Centered Layout) */}
         {stage === 'exam' && activeRoom && (
           <motion.div
             key="exam"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="w-full max-w-7xl mx-auto space-y-4 font-sans"
+            initial={{ opacity: 0, scale: 0.99 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.99 }}
+            className="fixed inset-0 z-50 flex min-h-screen w-full flex-col justify-center items-center overflow-y-auto bg-slate-50 text-slate-900 dark:bg-[#08090b] dark:text-zinc-100 font-sans p-4 sm:p-6 lg:p-8"
           >
-            {/* Warning Toast */}
-            {warningToast && (
-              <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                className="flex items-center gap-2 rounded-xl border border-rose-300 bg-rose-600 px-4 py-3 text-xs font-bold text-white shadow-lg"
-              >
-                <ShieldAlert className="h-4 w-4 shrink-0" />
-                <span>{warningToast}</span>
-              </motion.div>
-            )}
+            <div className="pointer-events-none fixed inset-0 bg-grid-light dark:bg-grid-dark bg-grid opacity-25" />
 
-            {!currentQ ? (
-              <div className="panel-card mx-auto max-w-md rounded-2xl p-6 text-center sm:p-8">
-                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-50 text-amber-600 dark:bg-amber-950/50 dark:text-amber-400">
-                  <AlertCircle className="h-7 w-7" />
-                </div>
-                <h3 className="mt-4 text-lg font-bold text-slate-900 dark:text-white">
-                  No Questions Assigned
-                </h3>
-                <p className="mt-1.5 text-xs text-slate-500 dark:text-zinc-400">
-                  This exam room (<strong>{activeRoom.title}</strong>) does not have any active questions assigned yet.
-                </p>
-                <button
-                  onClick={returnToDashboard}
-                  className="mt-6 w-full rounded-xl bg-slate-900 py-3 text-xs font-bold text-white shadow-subtle transition hover:bg-slate-800 dark:bg-zinc-100 dark:text-black dark:hover:bg-zinc-200 cursor-pointer"
+            <div className="relative z-10 w-full max-w-7xl mx-auto space-y-4 my-auto">
+              {/* Warning Toast */}
+              {warningToast && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="flex items-center gap-2 rounded-xl border border-rose-300 bg-rose-600 px-4 py-3 text-xs font-bold text-white shadow-lg"
                 >
-                  Return to Dashboard
-                </button>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
-                {/* COLUMN 1: Left Panel (Student & Proctor Metadata - 3 cols) */}
-                <div className="space-y-4 lg:col-span-3">
-                  {/* Candidate Profile Card */}
-                  <div className="panel-card rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm dark:border-zinc-800/80 dark:bg-[#0c0d10]">
-                    <div className="flex items-center gap-3 border-b border-slate-100 pb-3.5 dark:border-zinc-800/80">
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-900 font-mono text-sm font-bold text-white dark:bg-white dark:text-slate-950">
-                        {activeStudent?.name ? activeStudent.name.slice(0, 2).toUpperCase() : 'ST'}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <h4 className="truncate font-display text-sm font-bold text-slate-900 dark:text-white">
-                          {activeStudent?.name}
-                        </h4>
-                        <p className="font-mono text-[11px] font-bold text-slate-500 dark:text-zinc-400 truncate">
-                          SIN: {activeStudent?.register_no}
-                        </p>
-                      </div>
-                    </div>
+                  <ShieldAlert className="h-4 w-4 shrink-0" />
+                  <span>{warningToast}</span>
+                </motion.div>
+              )}
 
-                    <div className="mt-3.5 space-y-2 text-xs">
-                      <div className="flex justify-between text-slate-600 dark:text-zinc-400">
-                        <span>Department:</span>
-                        <span className="font-semibold text-slate-900 dark:text-white">{activeStudent?.department || activeRoom.department}</span>
-                      </div>
-                      <div className="flex justify-between text-slate-600 dark:text-zinc-400">
-                        <span>Roster:</span>
-                        <span className="font-semibold text-slate-900 dark:text-white">Year {activeStudent?.year || activeRoom.year} • Sem {activeStudent?.semester || activeRoom.semester}</span>
-                      </div>
-                      <div className="flex justify-between text-slate-600 dark:text-zinc-400">
-                        <span>Room Code:</span>
-                        <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">#{activeRoom.room_code}</span>
-                      </div>
-                    </div>
+              {!currentQ ? (
+                <div className="panel-card mx-auto max-w-md rounded-2xl p-6 text-center sm:p-8">
+                  <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-50 text-amber-600 dark:bg-amber-950/50 dark:text-amber-400">
+                    <AlertCircle className="h-7 w-7" />
                   </div>
-
-                  {/* Proctor Telemetry Card */}
-                  <div className="panel-card rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm dark:border-zinc-800/80 dark:bg-[#0c0d10]">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 text-xs font-bold text-slate-900 dark:text-white">
-                        <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                        <span>Proctoring Active</span>
-                      </div>
-                      <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                    </div>
-
-                    <div className="mt-3.5 space-y-2 text-xs">
-                      <div className="flex items-center justify-between rounded-xl bg-slate-50 p-2.5 dark:bg-zinc-900/60">
-                        <span className="text-slate-600 dark:text-zinc-400">Kiosk Mode:</span>
-                        <span className="font-bold text-slate-900 dark:text-white">SEB Kiosk</span>
-                      </div>
-                      <div className="flex items-center justify-between rounded-xl bg-slate-50 p-2.5 dark:bg-zinc-900/60">
-                        <span className="text-slate-600 dark:text-zinc-400">Malpractice Flags:</span>
-                        <span className={`font-bold ${warningsCount > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-white'}`}>
-                          {warningsCount} / 3 Flags
-                        </span>
-                      </div>
-                    </div>
-                  </div>
+                  <h3 className="mt-4 text-lg font-bold text-slate-900 dark:text-white">
+                    No Questions Assigned
+                  </h3>
+                  <p className="mt-1.5 text-xs text-slate-500 dark:text-zinc-400">
+                    This exam room (<strong>{activeRoom.title}</strong>) does not have any active questions assigned yet.
+                  </p>
+                  <button
+                    onClick={returnToDashboard}
+                    className="mt-6 w-full rounded-xl bg-slate-900 py-3 text-xs font-bold text-white shadow-subtle transition hover:bg-slate-800 dark:bg-zinc-100 dark:text-black dark:hover:bg-zinc-200 cursor-pointer"
+                  >
+                    Return to Dashboard
+                  </button>
                 </div>
-
-                {/* COLUMN 2: Center Panel (Question & Option Cards - 6 cols) */}
-                <div className="space-y-4 lg:col-span-6">
-                  <div className="panel-card flex flex-col justify-between rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm dark:border-zinc-800/80 dark:bg-[#0c0d10] min-h-[460px]">
-                    <div>
-                      {/* Question Top Header */}
-                      <div className="flex items-center justify-between border-b border-slate-100 pb-3.5 dark:border-zinc-800/80">
-                        <span className="rounded-full bg-brand-100 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-brand-900 dark:bg-zinc-800 dark:text-zinc-200">
-                          Question {currentIdx + 1} of {roomQuestions.length}
-                        </span>
-                        <div className="flex items-center gap-2">
-                          <span className="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-[11px] font-semibold text-slate-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300">
-                            {currentQ.topic}
-                          </span>
-                          <span className="text-[11px] font-bold capitalize text-slate-400 dark:text-zinc-500">
-                            {currentQ.difficulty}
-                          </span>
+              ) : (
+                <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
+                  {/* COLUMN 1: Left Panel (Student & Proctor Metadata - 3 cols) */}
+                  <div className="space-y-4 lg:col-span-3">
+                    {/* Candidate Profile Card */}
+                    <div className="panel-card rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm dark:border-zinc-800/80 dark:bg-[#0c0d10]">
+                      <div className="flex items-center gap-3 border-b border-slate-100 pb-3.5 dark:border-zinc-800/80">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-900 font-mono text-sm font-bold text-white dark:bg-white dark:text-slate-950">
+                          {activeStudent?.name ? activeStudent.name.slice(0, 2).toUpperCase() : 'ST'}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <h4 className="truncate font-display text-sm font-bold text-slate-900 dark:text-white">
+                            {activeStudent?.name}
+                          </h4>
+                          <p className="font-mono text-[11px] font-bold text-slate-500 dark:text-zinc-400 truncate">
+                            SIN: {activeStudent?.register_no}
+                          </p>
                         </div>
                       </div>
 
-                      {/* Question Text */}
-                      <h3 className="font-display mt-5 text-base font-bold leading-snug text-slate-900 dark:text-white sm:text-lg">
-                        {currentIdx + 1}. {currentQ.text}
-                      </h3>
+                      <div className="mt-3.5 space-y-2 text-xs">
+                        <div className="flex justify-between text-slate-600 dark:text-zinc-400">
+                          <span>Department:</span>
+                          <span className="font-semibold text-slate-900 dark:text-white">{activeStudent?.department || activeRoom.department}</span>
+                        </div>
+                        <div className="flex justify-between text-slate-600 dark:text-zinc-400">
+                          <span>Roster:</span>
+                          <span className="font-semibold text-slate-900 dark:text-white">Year {activeStudent?.year || activeRoom.year} • Sem {activeStudent?.semester || activeRoom.semester}</span>
+                        </div>
+                        <div className="flex justify-between text-slate-600 dark:text-zinc-400">
+                          <span>Room Code:</span>
+                          <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">#{activeRoom.room_code}</span>
+                        </div>
+                      </div>
+                    </div>
 
-                      {/* Options Grid */}
-                      <div className="mt-6 space-y-3">
-                        {currentQ.options.map((opt, optIdx) => {
-                          const isSelected = selectedAnswers[currentQ.id] === optIdx;
-                          return (
+                    {/* Proctor Telemetry Card */}
+                    <div className="panel-card rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm dark:border-zinc-800/80 dark:bg-[#0c0d10]">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-xs font-bold text-slate-900 dark:text-white">
+                          <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                          <span>Proctoring Active</span>
+                        </div>
+                        <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                      </div>
+
+                      <div className="mt-3.5 space-y-2 text-xs">
+                        <div className="flex items-center justify-between rounded-xl bg-slate-50 p-2.5 dark:bg-zinc-900/60">
+                          <span className="text-slate-600 dark:text-zinc-400">Kiosk Mode:</span>
+                          <span className="font-bold text-slate-900 dark:text-white">SEB Kiosk</span>
+                        </div>
+                        <div className="flex items-center justify-between rounded-xl bg-slate-50 p-2.5 dark:bg-zinc-900/60">
+                          <span className="text-slate-600 dark:text-zinc-400">Malpractice Warnings:</span>
+                          <span className={`font-bold ${warningsCount > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-white'}`}>
+                            {warningsCount} / 2 Warnings
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* COLUMN 2: Center Panel (Question & Option Cards - 6 cols) */}
+                  <div className="space-y-4 lg:col-span-6">
+                    <div className="panel-card flex flex-col justify-between rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm dark:border-zinc-800/80 dark:bg-[#0c0d10] min-h-[460px]">
+                      <div>
+                        {/* Question Top Header */}
+                        <div className="flex items-center justify-between border-b border-slate-100 pb-3.5 dark:border-zinc-800/80">
+                          <span className="rounded-full bg-brand-100 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-brand-900 dark:bg-zinc-800 dark:text-zinc-200">
+                            Question {currentIdx + 1} of {roomQuestions.length}
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-[11px] font-semibold text-slate-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300">
+                              {currentQ.topic}
+                            </span>
+                            <span className="text-[11px] font-bold capitalize text-slate-400 dark:text-zinc-500">
+                              {currentQ.difficulty}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Question Text */}
+                        <h3 className="font-display mt-5 text-base font-bold leading-snug text-slate-900 dark:text-white sm:text-lg">
+                          {currentIdx + 1}. {currentQ.text}
+                        </h3>
+
+                        {/* Options Grid */}
+                        <div className="mt-6 space-y-3">
+                          {currentQ.options.map((opt, optIdx) => {
+                            const isSelected = selectedAnswers[currentQ.id] === optIdx;
+                            return (
+                              <button
+                                key={optIdx}
+                                onClick={() => {
+                                  setSelectedAnswers((prev) => {
+                                    const nextAns = {
+                                      ...prev,
+                                      [currentQ.id]: optIdx,
+                                    };
+                                    if (activeStudent && activeRoom) {
+                                      safeStorage.setJson(
+                                        `exora_answers_${activeStudent.id}_${activeRoom.id}`,
+                                        nextAns,
+                                      );
+                                    }
+                                    return nextAns;
+                                  });
+                                }}
+                                className={`flex w-full items-center gap-3.5 rounded-xl border p-4 text-left text-xs font-semibold transition cursor-pointer ${
+                                  isSelected
+                                    ? 'border-slate-900 bg-slate-900 text-white shadow-subtle dark:border-white dark:bg-white dark:text-slate-950'
+                                    : 'border-slate-200/80 bg-white text-slate-800 hover:border-slate-300 hover:bg-slate-50 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-200 dark:hover:border-zinc-700 dark:hover:bg-zinc-900'
+                                }`}
+                              >
+                                <span
+                                  className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg font-mono text-xs font-bold ${
+                                    isSelected
+                                      ? 'bg-white/20 text-white dark:bg-black/20 dark:text-black'
+                                      : 'bg-slate-100 text-slate-600 dark:bg-zinc-800 dark:text-zinc-400'
+                                  }`}
+                                >
+                                  {String.fromCharCode(65 + optIdx)}
+                                </span>
+                                <span className="flex-1">{opt}</span>
+                                {isSelected && <Check className="h-4 w-4 shrink-0" strokeWidth={2.5} />}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Question Bottom Navigation Controls */}
+                      <div className="mt-8 flex items-center justify-between border-t border-slate-100 pt-4 dark:border-zinc-800/80">
+                        <button
+                          disabled={currentIdx === 0}
+                          onClick={() => setCurrentIdx((i) => Math.max(0, i - 1))}
+                          className="flex items-center gap-1.5 rounded-xl border border-slate-200 px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-40 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900 cursor-pointer"
+                        >
+                          <ArrowLeft className="h-3.5 w-3.5" /> Previous
+                        </button>
+
+                        <div className="flex items-center gap-2">
+                          {selectedAnswers[currentQ.id] !== undefined && (
                             <button
-                              key={optIdx}
                               onClick={() => {
                                 setSelectedAnswers((prev) => {
-                                  const nextAns = {
-                                    ...prev,
-                                    [currentQ.id]: optIdx,
-                                  };
+                                  const nextAns = { ...prev };
+                                  delete nextAns[currentQ.id];
                                   if (activeStudent && activeRoom) {
                                     safeStorage.setJson(
                                       `exora_answers_${activeStudent.id}_${activeRoom.id}`,
@@ -1060,156 +1114,108 @@ export function StudentPortal({
                                   return nextAns;
                                 });
                               }}
-                              className={`flex w-full items-center gap-3.5 rounded-xl border p-4 text-left text-xs font-semibold transition cursor-pointer ${
-                                isSelected
-                                  ? 'border-slate-900 bg-slate-900 text-white shadow-subtle dark:border-white dark:bg-white dark:text-slate-950'
-                                  : 'border-slate-200/80 bg-white text-slate-800 hover:border-slate-300 hover:bg-slate-50 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-200 dark:hover:border-zinc-700 dark:hover:bg-zinc-900'
+                              className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold text-slate-500 hover:bg-slate-50 dark:border-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-900 cursor-pointer"
+                            >
+                              Clear Selection
+                            </button>
+                          )}
+
+                          {currentIdx < roomQuestions.length - 1 && (
+                            <button
+                              onClick={() => setCurrentIdx((i) => i + 1)}
+                              className="flex items-center gap-1.5 rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white hover:bg-slate-800 dark:bg-zinc-100 dark:text-black dark:hover:bg-zinc-200 cursor-pointer"
+                            >
+                              Next <ArrowRight className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* COLUMN 3: Right Panel (Timer, Palette & Submit - 3 cols) */}
+                  <div className="space-y-4 lg:col-span-3">
+                    {/* Countdown Timer & Progress Card */}
+                    <div className="panel-card rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm dark:border-zinc-800/80 dark:bg-[#0c0d10]">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500">
+                          Remaining Time
+                        </span>
+                        <Clock className="h-4 w-4 text-brand-600 dark:text-brand-400" />
+                      </div>
+
+                      <p className="font-mono mt-2 text-3xl font-bold text-slate-900 dark:text-white">
+                        {formattedTime}
+                      </p>
+
+                      <div className="mt-3.5 space-y-1.5">
+                        <div className="flex justify-between text-xs text-slate-500 dark:text-zinc-400">
+                          <span>Answered Progress</span>
+                          <span className="font-bold text-slate-900 dark:text-white">
+                            {Object.keys(selectedAnswers).length} / {roomQuestions.length}
+                          </span>
+                        </div>
+                        <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-zinc-800">
+                          <div
+                            className="h-full bg-emerald-500 transition-all duration-300"
+                            style={{
+                              width: `${(Object.keys(selectedAnswers).length / Math.max(1, roomQuestions.length)) * 100}%`,
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Question Palette Grid */}
+                    <div className="panel-card rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm dark:border-zinc-800/80 dark:bg-[#0c0d10]">
+                      <h4 className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 mb-3">
+                        Question Palette
+                      </h4>
+
+                      <div className="grid grid-cols-5 gap-2">
+                        {roomQuestions.map((q, idx) => {
+                          const isAnswered = selectedAnswers[q.id] !== undefined;
+                          const isCurrent = idx === currentIdx;
+                          return (
+                            <button
+                              key={q.id}
+                              onClick={() => setCurrentIdx(idx)}
+                              className={`flex h-9 w-9 items-center justify-center rounded-xl font-mono text-xs font-bold transition cursor-pointer ${
+                                isCurrent
+                                  ? 'bg-slate-900 text-white ring-2 ring-slate-900 dark:bg-white dark:text-slate-950 dark:ring-white'
+                                  : isAnswered
+                                    ? 'bg-emerald-500 text-white'
+                                    : 'border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800'
                               }`}
                             >
-                              <span
-                                className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg font-mono text-xs font-bold ${
-                                  isSelected
-                                    ? 'bg-white/20 text-white dark:bg-black/20 dark:text-black'
-                                    : 'bg-slate-100 text-slate-600 dark:bg-zinc-800 dark:text-zinc-400'
-                                }`}
-                              >
-                                {String.fromCharCode(65 + optIdx)}
-                              </span>
-                              <span className="flex-1">{opt}</span>
-                              {isSelected && <Check className="h-4 w-4 shrink-0" strokeWidth={2.5} />}
+                              {idx + 1}
                             </button>
                           );
                         })}
                       </div>
                     </div>
 
-                    {/* Question Bottom Navigation Controls */}
-                    <div className="mt-8 flex items-center justify-between border-t border-slate-100 pt-4 dark:border-zinc-800/80">
-                      <button
-                        disabled={currentIdx === 0}
-                        onClick={() => setCurrentIdx((i) => Math.max(0, i - 1))}
-                        className="flex items-center gap-1.5 rounded-xl border border-slate-200 px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-40 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900 cursor-pointer"
-                      >
-                        <ArrowLeft className="h-3.5 w-3.5" /> Previous
-                      </button>
-
-                      <div className="flex items-center gap-2">
-                        {selectedAnswers[currentQ.id] !== undefined && (
-                          <button
-                            onClick={() => {
-                              setSelectedAnswers((prev) => {
-                                const nextAns = { ...prev };
-                                delete nextAns[currentQ.id];
-                                if (activeStudent && activeRoom) {
-                                  safeStorage.setJson(
-                                    `exora_answers_${activeStudent.id}_${activeRoom.id}`,
-                                    nextAns,
-                                  );
-                                }
-                                return nextAns;
-                              });
-                            }}
-                            className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold text-slate-500 hover:bg-slate-50 dark:border-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-900 cursor-pointer"
-                          >
-                            Clear Selection
-                          </button>
-                        )}
-
-                        {currentIdx < roomQuestions.length - 1 && (
-                          <button
-                            onClick={() => setCurrentIdx((i) => i + 1)}
-                            className="flex items-center gap-1.5 rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white hover:bg-slate-800 dark:bg-zinc-100 dark:text-black dark:hover:bg-zinc-200 cursor-pointer"
-                          >
-                            Next <ArrowRight className="h-3.5 w-3.5" />
-                          </button>
-                        )}
-                      </div>
-                    </div>
+                    {/* Submit Exam Button Card */}
+                    <button
+                      onClick={confirmAndFinishExam}
+                      disabled={submitting}
+                      className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 p-4 text-xs font-bold text-white shadow-md transition hover:bg-emerald-700 disabled:opacity-50 active:scale-[0.98] cursor-pointer"
+                    >
+                      {submitting ? (
+                        <>
+                          <Spinner size={16} /> Submitting Examination...
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 className="h-4 w-4" strokeWidth={2.5} />
+                          <span>Finish &amp; Submit Exam</span>
+                        </>
+                      )}
+                    </button>
                   </div>
                 </div>
-
-                {/* COLUMN 3: Right Panel (Timer, Palette & Submit - 3 cols) */}
-                <div className="space-y-4 lg:col-span-3">
-                  {/* Countdown Timer & Progress Card */}
-                  <div className="panel-card rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm dark:border-zinc-800/80 dark:bg-[#0c0d10]">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500">
-                        Remaining Time
-                      </span>
-                      <Clock className="h-4 w-4 text-brand-600 dark:text-brand-400" />
-                    </div>
-
-                    <p className="font-mono mt-2 text-3xl font-bold text-slate-900 dark:text-white">
-                      {formattedTime}
-                    </p>
-
-                    <div className="mt-3.5 space-y-1.5">
-                      <div className="flex justify-between text-xs text-slate-500 dark:text-zinc-400">
-                        <span>Answered Progress</span>
-                        <span className="font-bold text-slate-900 dark:text-white">
-                          {Object.keys(selectedAnswers).length} / {roomQuestions.length}
-                        </span>
-                      </div>
-                      <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-zinc-800">
-                        <div
-                          className="h-full bg-emerald-500 transition-all duration-300"
-                          style={{
-                            width: `${(Object.keys(selectedAnswers).length / Math.max(1, roomQuestions.length)) * 100}%`,
-                          }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Question Palette Grid */}
-                  <div className="panel-card rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm dark:border-zinc-800/80 dark:bg-[#0c0d10]">
-                    <h4 className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 mb-3">
-                      Question Palette
-                    </h4>
-
-                    <div className="grid grid-cols-5 gap-2">
-                      {roomQuestions.map((q, idx) => {
-                        const isAnswered = selectedAnswers[q.id] !== undefined;
-                        const isCurrent = idx === currentIdx;
-                        return (
-                          <button
-                            key={q.id}
-                            onClick={() => setCurrentIdx(idx)}
-                            className={`flex h-9 w-9 items-center justify-center rounded-xl font-mono text-xs font-bold transition cursor-pointer ${
-                              isCurrent
-                                ? 'bg-slate-900 text-white ring-2 ring-slate-900 dark:bg-white dark:text-slate-950 dark:ring-white'
-                                : isAnswered
-                                  ? 'bg-emerald-500 text-white'
-                                  : 'border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800'
-                            }`}
-                          >
-                            {idx + 1}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Submit Exam Button Card */}
-                  <button
-                    onClick={confirmAndFinishExam}
-                    disabled={submitting}
-                    className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 p-4 text-xs font-bold text-white shadow-md transition hover:bg-emerald-700 disabled:opacity-50 active:scale-[0.98] cursor-pointer"
-                  >
-                    {submitting ? (
-                      <>
-                        <Spinner size={16} /> Submitting Examination...
-                      </>
-                    ) : (
-                      <>
-                        <CheckCircle2 className="h-4 w-4" strokeWidth={2.5} />
-                        <span>Finish &amp; Submit Exam</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-            )}
+              )}
+            </div>
           </motion.div>
         )}
 
