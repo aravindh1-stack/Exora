@@ -25,7 +25,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import type { StudentWithSession, ExamRoom, Question } from '@/lib/types';
-import { submitExamSession, logProctoringIncident, matchStudentToRoom, createStudent } from '@/lib/queries';
+import { submitExamSession, logProctoringIncident, getQuestionsForRoom } from '@/lib/queries';
 import { safeStorage } from '@/lib/storage';
 import { Spinner } from './ui';
 import { StudentDashboard } from './StudentDashboard';
@@ -176,37 +176,10 @@ export function StudentPortal({
     return ua.includes('seb') || ua.includes('safeexambrowser') || forceBypass || true;
   }, []);
 
-  // Helper for strict room-based question filtering (Returns empty list if 0 questions assigned to room)
+  // Helper for strict room-based question filtering (Single source of truth helper)
   const getRoomQuestionsStrict = useCallback((allQuestions: Question[], room: ExamRoom) => {
-    if (!allQuestions || allQuestions.length === 0) {
-      return { list: [], isFallback: false };
-    }
-
-    const normRoomId = (room.id || '').toLowerCase();
-    const normRoomCode = normalizeCode(room.room_code);
-
-    let filtered = allQuestions.filter((q) => {
-      if (!q.room_id) return false;
-      const qRoom = q.room_id.toLowerCase();
-      return qRoom === normRoomId || normalizeCode(q.room_id) === normRoomCode;
-    });
-
-    if (filtered.length === 0 && (room.title || room.department)) {
-      const roomTitle = normalizeCode(room.title);
-      const roomDept = normalizeCode(room.department);
-      filtered = allQuestions.filter((q) => {
-        if (!q.topic) return false;
-        const topicNorm = normalizeCode(q.topic);
-        return roomTitle.includes(topicNorm) || roomDept.includes(topicNorm);
-      });
-    }
-
-    // STRICT FIX: If 0 questions assigned to this specific room, return empty list!
-    if (filtered.length === 0) {
-      return { list: [], isFallback: false };
-    }
-
-    return { list: filtered, isFallback: false };
+    const list = getQuestionsForRoom(allQuestions, room);
+    return { list, isFallback: false };
   }, []);
 
   // Direct Quiz Launch Handler from Student Dashboard

@@ -883,77 +883,148 @@ export function StudentDashboard({
                       Loading submitted answer key details...
                     </p>
                   </div>
-                ) : reviewResponses.length === 0 && questions.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-12 text-center">
-                    <BookOpen className="h-8 w-8 text-brand-300 dark:text-zinc-700" />
-                    <p className="mt-3 text-xs font-medium text-brand-400 dark:text-zinc-500">
-                      No response record found for this session.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {(reviewResponses.length > 0 ? reviewResponses : []).map((resp, idx) => {
-                      const q = resp.question;
-                      if (!q) return null;
+                ) : (() => {
+                    // Compute review questions list
+                    const activeRoomQs = (questions || []).filter((q) => {
+                      if (!q.room_id) return false;
+                      const targetRoom = reviewRoom || rooms[0];
+                      if (!targetRoom) return false;
+                      const normRoomId = (targetRoom.id || '').toLowerCase();
+                      const normRoomCode = (targetRoom.room_code || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+                      const qRoom = q.room_id.toLowerCase();
+                      return qRoom === normRoomId || q.room_id.toLowerCase().replace(/[^a-z0-9]/g, '') === normRoomCode;
+                    });
+
+                    const hasResponses = reviewResponses && reviewResponses.length > 0;
+                    const hasRoomQs = activeRoomQs && activeRoomQs.length > 0;
+
+                    if (!hasResponses && !hasRoomQs) {
                       return (
-                        <div
-                          key={resp.id || idx}
-                          className="rounded-2xl border border-brand-200/80 bg-white p-5 space-y-3 dark:border-zinc-800 dark:bg-zinc-950/60"
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <h4 className="text-xs font-bold text-brand-950 dark:text-white">
-                              Q{idx + 1}. {q.text}
-                            </h4>
-                            <span className="shrink-0 rounded-md border border-brand-200 bg-brand-50 px-2 py-0.5 text-[10px] font-bold text-brand-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
-                              {q.topic}
-                            </span>
-                          </div>
+                        <div className="flex flex-col items-center justify-center py-12 text-center">
+                          <BookOpen className="h-8 w-8 text-brand-300 dark:text-zinc-700" />
+                          <p className="mt-3 text-xs font-medium text-brand-400 dark:text-zinc-500">
+                            No active questions found for this exam room repository.
+                          </p>
+                        </div>
+                      );
+                    }
 
-                          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                            {q.options.map((opt, optIdx) => {
-                              const isStudentSelected = resp.selected_index === optIdx;
-                              const isCorrectAnswer = q.correct_index === optIdx;
-
-                              let cardStyle =
-                                'border-brand-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 text-brand-900 dark:text-zinc-200';
-                              let badgeText = null;
-
-                              if (isStudentSelected && isCorrectAnswer) {
-                                cardStyle =
-                                  'border-emerald-300 bg-emerald-50 text-emerald-950 dark:border-emerald-900/80 dark:bg-emerald-950/60 dark:text-emerald-200 font-bold';
-                                badgeText = '✓ Your Choice (Correct)';
-                              } else if (isStudentSelected && !isCorrectAnswer) {
-                                cardStyle =
-                                  'border-rose-300 bg-rose-50 text-rose-950 dark:border-rose-900/80 dark:bg-rose-950/60 dark:text-rose-200 font-bold';
-                                badgeText = '✗ Your Choice (Incorrect)';
-                              } else if (isCorrectAnswer) {
-                                cardStyle =
-                                  'border-emerald-300/80 bg-emerald-50/50 text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-300';
-                                badgeText = 'Correct Answer';
-                              }
-
+                    // Render question items
+                    return (
+                      <div className="space-y-4">
+                        {hasResponses
+                          ? reviewResponses.map((resp, idx) => {
+                              const q = resp.question;
+                              if (!q) return null;
                               return (
                                 <div
-                                  key={optIdx}
-                                  className={`flex items-center justify-between rounded-xl border p-3 text-xs transition ${cardStyle}`}
+                                  key={resp.id || idx}
+                                  className="rounded-2xl border border-brand-200/80 bg-white p-5 space-y-3 dark:border-zinc-800 dark:bg-zinc-950/60"
                                 >
-                                  <span>
-                                    {String.fromCharCode(65 + optIdx)}. {opt}
-                                  </span>
-                                  {badgeText && (
-                                    <span className="text-[10px] font-bold uppercase tracking-wider">
-                                      {badgeText}
+                                  <div className="flex items-start justify-between gap-3">
+                                    <h4 className="text-xs font-bold text-brand-950 dark:text-white">
+                                      Q{idx + 1}. {q.text}
+                                    </h4>
+                                    <span className="shrink-0 rounded-md border border-brand-200 bg-brand-50 px-2 py-0.5 text-[10px] font-bold text-brand-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
+                                      {q.topic}
                                     </span>
-                                  )}
+                                  </div>
+
+                                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                    {q.options.map((opt, optIdx) => {
+                                      const isStudentSelected = resp.selected_index === optIdx;
+                                      const isCorrectAnswer = q.correct_index === optIdx;
+
+                                      let cardStyle =
+                                        'border-brand-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 text-brand-900 dark:text-zinc-200';
+                                      let badgeText = null;
+
+                                      if (isStudentSelected && isCorrectAnswer) {
+                                        cardStyle =
+                                          'border-emerald-300 bg-emerald-50 text-emerald-950 dark:border-emerald-900/80 dark:bg-emerald-950/60 dark:text-emerald-200 font-bold';
+                                        badgeText = '✓ Your Choice (Correct)';
+                                      } else if (isStudentSelected && !isCorrectAnswer) {
+                                        cardStyle =
+                                          'border-rose-300 bg-rose-50 text-rose-950 dark:border-rose-900/80 dark:bg-rose-950/60 dark:text-rose-200 font-bold';
+                                        badgeText = '✗ Your Choice (Incorrect)';
+                                      } else if (isCorrectAnswer) {
+                                        cardStyle =
+                                          'border-emerald-300/80 bg-emerald-50/50 text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-300';
+                                        badgeText = 'Correct Answer';
+                                      }
+
+                                      return (
+                                        <div
+                                          key={optIdx}
+                                          className={`flex items-center justify-between rounded-xl border p-3 text-xs transition ${cardStyle}`}
+                                        >
+                                          <span>
+                                            {String.fromCharCode(65 + optIdx)}. {opt}
+                                          </span>
+                                          {badgeText && (
+                                            <span className="text-[10px] font-bold uppercase tracking-wider">
+                                              {badgeText}
+                                            </span>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              );
+                            })
+                          : activeRoomQs.map((q, idx) => {
+                              return (
+                                <div
+                                  key={q.id || idx}
+                                  className="rounded-2xl border border-brand-200/80 bg-white p-5 space-y-3 dark:border-zinc-800 dark:bg-zinc-950/60"
+                                >
+                                  <div className="flex items-start justify-between gap-3">
+                                    <h4 className="text-xs font-bold text-brand-950 dark:text-white">
+                                      Q{idx + 1}. {q.text}
+                                    </h4>
+                                    <span className="shrink-0 rounded-md border border-brand-200 bg-brand-50 px-2 py-0.5 text-[10px] font-bold text-brand-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
+                                      {q.topic}
+                                    </span>
+                                  </div>
+
+                                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                    {q.options.map((opt, optIdx) => {
+                                      const isCorrectAnswer = q.correct_index === optIdx;
+
+                                      let cardStyle =
+                                        'border-brand-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 text-brand-900 dark:text-zinc-200';
+                                      let badgeText = null;
+
+                                      if (isCorrectAnswer) {
+                                        cardStyle =
+                                          'border-emerald-300 bg-emerald-50 text-emerald-950 dark:border-emerald-900/80 dark:bg-emerald-950/60 dark:text-emerald-200 font-bold';
+                                        badgeText = '✓ Correct Answer';
+                                      }
+
+                                      return (
+                                        <div
+                                          key={optIdx}
+                                          className={`flex items-center justify-between rounded-xl border p-3 text-xs transition ${cardStyle}`}
+                                        >
+                                          <span>
+                                            {String.fromCharCode(65 + optIdx)}. {opt}
+                                          </span>
+                                          {badgeText && (
+                                            <span className="text-[10px] font-bold uppercase tracking-wider">
+                                              {badgeText}
+                                            </span>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
                                 </div>
                               );
                             })}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
+                      </div>
+                    );
+                  })()}
               </div>
 
               {/* Modal Footer */}

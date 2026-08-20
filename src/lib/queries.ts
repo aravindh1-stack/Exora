@@ -350,12 +350,32 @@ export async function fetchStudentResponses(sessionId: string): Promise<ExamResp
       question: qMap.get(r.question_id),
     }));
   } catch (err) {
-    console.error('Error fetching student exam responses:', err);
+    console.error('Failed to fetch student responses:', err);
     return [];
   }
 }
 
+export function getQuestionsForRoom(allQuestions: Question[], room: ExamRoom): Question[] {
+  if (!allQuestions || allQuestions.length === 0 || !room) return [];
 
+  const normRoomId = (room.id || '').toLowerCase();
+  const normRoomCode = (room.room_code || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
+  let filtered = allQuestions.filter((q) => {
+    if (!q.room_id) return false;
+    const qRoom = q.room_id.toLowerCase();
+    return qRoom === normRoomId || q.room_id.toLowerCase().replace(/[^a-z0-9]/g, '') === normRoomCode;
+  });
 
+  if (filtered.length === 0 && (room.title || room.department)) {
+    const roomTitle = (room.title || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const roomDept = (room.department || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    filtered = allQuestions.filter((q) => {
+      if (!q.topic) return false;
+      const topicNorm = q.topic.toLowerCase().replace(/[^a-z0-9]/g, '');
+      return (roomTitle.includes(topicNorm) || roomDept.includes(topicNorm)) && topicNorm.length > 2;
+    });
+  }
 
+  return filtered;
+}

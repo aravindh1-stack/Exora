@@ -15,7 +15,7 @@ import {
   X,
 } from 'lucide-react';
 import type { StudentWithSession, ExamRoom, ExamSession, Question } from '@/lib/types';
-import { matchStudentToRoom, fetchAllSessionsForStudent } from '@/lib/queries';
+import { matchStudentToRoom, fetchAllSessionsForStudent, getQuestionsForRoom } from '@/lib/queries';
 
 interface MyQuizzesProps {
   student: StudentWithSession;
@@ -62,13 +62,11 @@ export function MyQuizzes({
   // Map quiz items with exact session status
   const quizItems = useMemo(() => {
     return deptRooms.map((room) => {
-      // Find matching session in real database records for this student and room
+      // Strict matching ONLY for this specific room_id
       const sessionMatch = sessions.find((s) => s.room_id === room.id);
 
-      // Fallback matching if session_id exists on student object and only 1 room exists
       const isStudentSessionMatch =
-        Boolean(student.session_id) &&
-        (student.room_id === room.id || deptRooms.length === 1);
+        Boolean(student.session_id) && student.room_id === room.id;
 
       let quizStatus: 'pending' | 'completed' | 'flagged' = 'pending';
       let score: number | null = null;
@@ -271,13 +269,7 @@ export function MyQuizzes({
                       Assigned Questions:
                     </span>
                     <span className="rounded-lg bg-emerald-50 px-2.5 py-0.5 font-mono text-xs font-extrabold text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
-                      {questions ? questions.filter((q) => {
-                        if (!q.room_id) return false;
-                        const normRoomId = (room.id || '').toLowerCase();
-                        const normRoomCode = (room.room_code || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-                        const qRoom = q.room_id.toLowerCase();
-                        return qRoom === normRoomId || q.room_id.toLowerCase().replace(/[^a-z0-9]/g, '') === normRoomCode;
-                      }).length : 0} Questions
+                      {getQuestionsForRoom(questions, room).length} Questions
                     </span>
                   </div>
                 </div>
