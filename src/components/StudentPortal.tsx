@@ -684,24 +684,24 @@ export function StudentPortal({
           >
             <div className="pointer-events-none fixed inset-0 bg-grid-light dark:bg-grid-dark bg-grid opacity-25" />
 
-            <div className="relative z-10 flex min-h-screen w-full max-w-5xl mx-auto flex-col justify-between p-4 sm:p-6 lg:p-10 space-y-8">
+            <div className="relative z-10 flex min-h-screen w-full max-w-[1200px] mx-auto flex-col justify-between p-6 sm:p-8 lg:p-12 space-y-8 my-auto">
               {/* 1. Top Navigation & Enterprise Header */}
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-slate-200/80 pb-6 dark:border-zinc-800/80">
-                <div className="flex items-center gap-3.5">
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-900 text-white shadow-subtle dark:bg-white dark:text-slate-950">
+                <div className="flex items-center gap-4">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-900 text-white shadow-md dark:bg-white dark:text-slate-950">
                     <ShieldCheck className="h-6 w-6" strokeWidth={2} />
                   </div>
                   <div>
-                    <div className="flex items-center gap-2">
-                      <h1 className="font-display text-lg font-bold tracking-tight text-slate-900 dark:text-white">
+                    <div className="flex items-center gap-2.5 flex-wrap">
+                      <h1 className="font-display text-xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-2xl">
                         Exora Examination Portal
                       </h1>
-                      <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/50 dark:text-emerald-300">
-                        <CheckCircle2 className="h-3 w-3" /> SEB Kiosk Verified
+                      <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/50 dark:text-emerald-300">
+                        <CheckCircle2 className="h-3.5 w-3.5" /> SEB Kiosk Verified
                       </span>
                     </div>
-                    <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
-                      Pre-Flight Candidate Protocol &amp; Institutional Verification
+                    <p className="text-xs text-slate-500 dark:text-zinc-400 mt-1">
+                      Pre-Flight Candidate Protocol &amp; Institutional Identity Verification
                     </p>
                   </div>
                 </div>
@@ -715,58 +715,58 @@ export function StudentPortal({
                 </button>
               </div>
 
-              {/* 2. Bento Grid Metric Cards */}
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              {/* 2. Bento Grid Metric Cards (Wider Layout) */}
+              <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
                 {/* Candidate Identity Card */}
-                <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm dark:border-zinc-800/80 dark:bg-[#0c0d10]">
+                <div className="rounded-3xl border border-slate-200/80 bg-white p-6 shadow-sm dark:border-zinc-800/80 dark:bg-[#0c0d10]">
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500">
+                    <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500">
                       Candidate Identity
                     </span>
-                    <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse" />
                   </div>
-                  <h3 className="font-display mt-2 text-base font-bold text-slate-900 dark:text-white">
+                  <h3 className="font-display mt-3 text-lg font-bold text-slate-900 dark:text-white">
                     {activeStudent.name}
                   </h3>
-                  <p className="font-mono text-xs font-bold text-slate-500 dark:text-zinc-400 mt-0.5">
+                  <p className="font-mono text-xs font-bold text-slate-500 dark:text-zinc-400 mt-1">
                     SIN: {activeStudent.register_no}
                   </p>
                 </div>
 
                 {/* Department Roster Card */}
-                <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm dark:border-zinc-800/80 dark:bg-[#0c0d10]">
+                <div className="rounded-3xl border border-slate-200/80 bg-white p-6 shadow-sm dark:border-zinc-800/80 dark:bg-[#0c0d10]">
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500">
+                    <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500">
                       Department Roster
                     </span>
-                    <span className="rounded-md bg-slate-100 px-2 py-0.5 font-mono text-[10px] font-bold text-slate-700 dark:bg-zinc-800 dark:text-zinc-300">
+                    <span className="rounded-lg bg-slate-100 px-2.5 py-1 font-mono text-[11px] font-bold text-slate-700 dark:bg-zinc-800 dark:text-zinc-300">
                       Year {activeStudent.year || activeRoom.year} • Sem {activeStudent.semester || activeRoom.semester}
                     </span>
                   </div>
-                  <h3 className="font-display mt-2 text-base font-bold text-slate-900 dark:text-white">
+                  <h3 className="font-display mt-3 text-lg font-bold text-slate-900 dark:text-white">
                     {activeStudent.department || activeRoom.department}
                   </h3>
-                  <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
+                  <p className="text-xs text-slate-500 dark:text-zinc-400 mt-1">
                     Verified Academic Roster
                   </p>
                 </div>
 
                 {/* Exam Room Access Card */}
-                <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm dark:border-zinc-800/80 dark:bg-[#0c0d10]">
+                <div className="rounded-3xl border border-slate-200/80 bg-white p-6 shadow-sm dark:border-zinc-800/80 dark:bg-[#0c0d10]">
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500">
+                    <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500">
                       Room Access Code
                     </span>
                     <span className="font-mono text-xs font-bold text-emerald-600 dark:text-emerald-400">
                       #{activeRoom.room_code}
                     </span>
                   </div>
-                  <h3 className="font-display mt-2 text-base font-bold text-slate-900 dark:text-white truncate">
+                  <h3 className="font-display mt-3 text-lg font-bold text-slate-900 dark:text-white truncate">
                     {activeRoom.title}
                   </h3>
-                  <div className="mt-1 flex items-center gap-3 text-xs text-slate-500 dark:text-zinc-400">
-                    <span className="flex items-center gap-1 font-semibold">
-                      <Clock className="h-3.5 w-3.5" /> {activeRoom.duration_minutes} Mins
+                  <div className="mt-1.5 flex items-center gap-3 text-xs text-slate-500 dark:text-zinc-400">
+                    <span className="flex items-center gap-1.5 font-semibold">
+                      <Clock className="h-3.5 w-3.5 text-slate-400" /> {activeRoom.duration_minutes} Mins
                     </span>
                     <span>•</span>
                     <span className="font-semibold">{roomQuestions.length} Questions</span>
@@ -775,24 +775,24 @@ export function StudentPortal({
               </div>
 
               {/* 3. Professional Malpractice Policy Box */}
-              <div className="rounded-3xl border border-amber-200/90 bg-amber-50/60 p-6 shadow-sm dark:border-amber-900/60 dark:bg-amber-950/30">
+              <div className="rounded-3xl border border-amber-200/90 bg-amber-50/70 p-6 sm:p-7 shadow-sm dark:border-amber-900/60 dark:bg-amber-950/30">
                 <div className="flex items-start gap-4">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-amber-500 text-white shadow-subtle">
-                    <ShieldAlert className="h-5 w-5" />
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-amber-500 text-white shadow-subtle mt-0.5">
+                    <ShieldAlert className="h-6 w-6" />
                   </div>
                   <div>
                     <h4 className="font-display text-base font-bold text-amber-950 dark:text-amber-200">
                       Malpractice &amp; Mark Deduction Policy
                     </h4>
-                    <p className="mt-1.5 text-xs leading-relaxed text-amber-950/90 dark:text-amber-300/90">
+                    <p className="mt-1.5 text-xs sm:text-sm leading-relaxed text-amber-950/90 dark:text-amber-300/90">
                       The automated proctoring telemetry engine monitors tab switches, window minimization, and illegal keyboard shortcuts. <strong>Any detected malpractice will be logged and reported directly to department staff, resulting in mark deductions or exam disqualification.</strong>
                     </p>
                   </div>
                 </div>
               </div>
 
-              {/* 4. Interactive Toggle Verification Cards */}
-              <div className="space-y-3">
+              {/* 4. Interactive Toggle Verification Cards (Spacious Layout) */}
+              <div className="space-y-4">
                 <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500">
                   Mandatory Candidate Declarations
                 </h4>
@@ -800,24 +800,26 @@ export function StudentPortal({
                 {/* Card 1 */}
                 <div
                   onClick={() => setChkIdentity(!chkIdentity)}
-                  className={`group flex items-start gap-4 rounded-2xl border p-4.5 transition cursor-pointer ${
+                  className={`group flex items-center gap-4 rounded-3xl border p-5 sm:p-6 transition cursor-pointer ${
                     chkIdentity
                       ? 'border-slate-900 bg-white shadow-md dark:border-white dark:bg-zinc-900'
                       : 'border-slate-200/80 bg-white hover:border-slate-300 dark:border-zinc-800/80 dark:bg-[#0c0d10] dark:hover:border-zinc-700'
                   }`}
                 >
-                  <div className="mt-0.5">
+                  <div className="shrink-0">
                     {chkIdentity ? (
-                      <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                      <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400">
+                        <CheckCircle2 className="h-5 w-5" strokeWidth={2.5} />
+                      </div>
                     ) : (
-                      <div className="h-5 w-5 rounded-full border-2 border-slate-300 dark:border-zinc-700 group-hover:border-slate-500" />
+                      <div className="h-7 w-7 rounded-xl border-2 border-slate-300 dark:border-zinc-700 group-hover:border-slate-500" />
                     )}
                   </div>
-                  <div>
-                    <p className="text-xs font-bold text-slate-900 dark:text-white">
+                  <div className="min-w-0 flex-1">
+                    <h5 className="font-display text-sm font-bold text-slate-900 dark:text-white">
                       Identity &amp; Candidate Verification
-                    </p>
-                    <p className="mt-0.5 text-xs text-slate-600 dark:text-zinc-400">
+                    </h5>
+                    <p className="mt-1 text-xs sm:text-sm leading-relaxed text-slate-600 dark:text-zinc-300">
                       I confirm that I am the verified candidate (<strong>{activeStudent.name}</strong>) taking this examination under my own registered student credentials.
                     </p>
                   </div>
@@ -826,24 +828,26 @@ export function StudentPortal({
                 {/* Card 2 */}
                 <div
                   onClick={() => setChkMalpractice(!chkMalpractice)}
-                  className={`group flex items-start gap-4 rounded-2xl border p-4.5 transition cursor-pointer ${
+                  className={`group flex items-center gap-4 rounded-3xl border p-5 sm:p-6 transition cursor-pointer ${
                     chkMalpractice
                       ? 'border-slate-900 bg-white shadow-md dark:border-white dark:bg-zinc-900'
                       : 'border-slate-200/80 bg-white hover:border-slate-300 dark:border-zinc-800/80 dark:bg-[#0c0d10] dark:hover:border-zinc-700'
                   }`}
                 >
-                  <div className="mt-0.5">
+                  <div className="shrink-0">
                     {chkMalpractice ? (
-                      <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                      <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400">
+                        <CheckCircle2 className="h-5 w-5" strokeWidth={2.5} />
+                      </div>
                     ) : (
-                      <div className="h-5 w-5 rounded-full border-2 border-slate-300 dark:border-zinc-700 group-hover:border-slate-500" />
+                      <div className="h-7 w-7 rounded-xl border-2 border-slate-300 dark:border-zinc-700 group-hover:border-slate-500" />
                     )}
                   </div>
-                  <div>
-                    <p className="text-xs font-bold text-slate-900 dark:text-white">
+                  <div className="min-w-0 flex-1">
+                    <h5 className="font-display text-sm font-bold text-slate-900 dark:text-white">
                       Proctoring &amp; Anti-Cheat Telemetry Agreement
-                    </p>
-                    <p className="mt-0.5 text-xs text-slate-600 dark:text-zinc-400">
+                    </h5>
+                    <p className="mt-1 text-xs sm:text-sm leading-relaxed text-slate-600 dark:text-zinc-300">
                       I understand that tab switching, window minimization, or copying will log real-time incident flags and staff will reduce my marks accordingly.
                     </p>
                   </div>
@@ -852,24 +856,26 @@ export function StudentPortal({
                 {/* Card 3 */}
                 <div
                   onClick={() => setChkTime(!chkTime)}
-                  className={`group flex items-start gap-4 rounded-2xl border p-4.5 transition cursor-pointer ${
+                  className={`group flex items-center gap-4 rounded-3xl border p-5 sm:p-6 transition cursor-pointer ${
                     chkTime
                       ? 'border-slate-900 bg-white shadow-md dark:border-white dark:bg-zinc-900'
                       : 'border-slate-200/80 bg-white hover:border-slate-300 dark:border-zinc-800/80 dark:bg-[#0c0d10] dark:hover:border-zinc-700'
                   }`}
                 >
-                  <div className="mt-0.5">
+                  <div className="shrink-0">
                     {chkTime ? (
-                      <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                      <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400">
+                        <CheckCircle2 className="h-5 w-5" strokeWidth={2.5} />
+                      </div>
                     ) : (
-                      <div className="h-5 w-5 rounded-full border-2 border-slate-300 dark:border-zinc-700 group-hover:border-slate-500" />
+                      <div className="h-7 w-7 rounded-xl border-2 border-slate-300 dark:border-zinc-700 group-hover:border-slate-500" />
                     )}
                   </div>
-                  <div>
-                    <p className="text-xs font-bold text-slate-900 dark:text-white">
+                  <div className="min-w-0 flex-1">
+                    <h5 className="font-display text-sm font-bold text-slate-900 dark:text-white">
                       Duration &amp; Timed Submission Commitment
-                    </p>
-                    <p className="mt-0.5 text-xs text-slate-600 dark:text-zinc-400">
+                    </h5>
+                    <p className="mt-1 text-xs sm:text-sm leading-relaxed text-slate-600 dark:text-zinc-300">
                       I agree to complete and submit all question responses within the allocated duration of <strong>{activeRoom.duration_minutes} minutes</strong>.
                     </p>
                   </div>
@@ -878,8 +884,8 @@ export function StudentPortal({
 
               {/* 5. Full-Width Action Footer */}
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-t border-slate-200/80 pt-6 dark:border-zinc-800/80">
-                <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-zinc-400">
-                  <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                <div className="flex items-center gap-2 text-xs font-semibold text-slate-500 dark:text-zinc-400">
+                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
                   <span>
                     {[chkIdentity, chkMalpractice, chkTime].filter(Boolean).length} of 3 Protocol Declarations Checked
                   </span>
@@ -905,7 +911,7 @@ export function StudentPortal({
                       } catch (e) {}
                     }, 100);
                   }}
-                  className="flex items-center justify-center gap-2 rounded-2xl bg-slate-900 px-8 py-4 text-xs font-bold text-white shadow-lg transition hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98] dark:bg-white dark:text-slate-950 dark:hover:bg-zinc-200 cursor-pointer"
+                  className="flex items-center justify-center gap-2.5 rounded-2xl bg-slate-900 px-8 py-4 text-xs font-bold text-white shadow-lg transition hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98] dark:bg-white dark:text-slate-950 dark:hover:bg-zinc-200 cursor-pointer"
                 >
                   <Maximize2 className="h-4 w-4" />
                   <span>Start Examination (Enter Fullscreen)</span>
