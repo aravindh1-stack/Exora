@@ -132,6 +132,7 @@ export function StudentPortal({
   const [submitting, setSubmitting] = useState(false);
   const [finalScore, setFinalScore] = useState<number | null>(null);
   const [warningToast, setWarningToast] = useState<string | null>(null);
+  const [submitModalOpen, setSubmitModalOpen] = useState(false);
 
   // Terms Agreement Checkboxes
   const [chkIdentity, setChkIdentity] = useState(false);
@@ -492,19 +493,8 @@ export function StudentPortal({
   const currentQ = roomQuestions[currentIdx];
 
   const confirmAndFinishExam = useCallback(() => {
-    const total = roomQuestions.length;
-    const answered = Object.keys(selectedAnswers).length;
-    const unAnswered = Math.max(0, total - answered);
-
-    let msg = `Are you sure you want to finish and submit your examination session?`;
-    if (unAnswered > 0) {
-      msg += `\n\nNotice: You have ${unAnswered} unanswered question(s). Skipped questions will be recorded as unattempted.`;
-    }
-
-    if (window.confirm(msg)) {
-      handleFinalSubmit(false);
-    }
-  }, [roomQuestions, selectedAnswers, handleFinalSubmit]);
+    setSubmitModalOpen(true);
+  }, []);
 
   return (
     <div className={stage === 'dashboard' ? 'w-full min-h-screen font-sans' : 'mx-auto max-w-7xl px-4 py-8 sm:py-10 min-h-[85vh] flex flex-col justify-center font-sans'}>
@@ -1268,6 +1258,118 @@ export function StudentPortal({
               </button>
             </div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Custom Enterprise Submission Confirmation Modal */}
+      <AnimatePresence>
+        {submitModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSubmitModalOpen(false)}
+              className="fixed inset-0 bg-black/70 backdrop-blur-md"
+            />
+
+            {/* Modal Card */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 16 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 16 }}
+              className="panel-card relative z-10 w-full max-w-lg overflow-hidden rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-zinc-800 dark:bg-[#0c0d10] sm:p-8"
+            >
+              {/* Top Accent Icon */}
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-emerald-200 bg-emerald-50 text-emerald-600 dark:border-emerald-900/60 dark:bg-emerald-950/50 dark:text-emerald-400">
+                <CheckCircle2 className="h-7 w-7" />
+              </div>
+
+              {/* Title & Description */}
+              <div className="mt-5 text-center">
+                <h3 className="font-display text-xl font-bold text-brand-950 dark:text-white">
+                  Confirm Examination Submission
+                </h3>
+                <p className="mt-2 text-xs font-medium text-brand-500 dark:text-zinc-400 leading-relaxed">
+                  Are you sure you want to finish and submit your exam session? Once submitted, your answers will be auto-graded and finalized.
+                </p>
+              </div>
+
+              {/* Submission Stats Metrics Grid */}
+              <div className="mt-6 grid grid-cols-3 gap-3 text-center">
+                <div className="rounded-2xl border border-slate-200/80 bg-slate-50 p-3 dark:border-zinc-800 dark:bg-zinc-900/80">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-zinc-500">
+                    Total
+                  </span>
+                  <p className="mt-1 font-mono text-base font-extrabold text-brand-950 dark:text-white">
+                    {roomQuestions.length}
+                  </p>
+                </div>
+
+                <div className="rounded-2xl border border-emerald-200 bg-emerald-50/80 p-3 dark:border-emerald-900/60 dark:bg-emerald-950/40">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                    Answered
+                  </span>
+                  <p className="mt-1 font-mono text-base font-extrabold text-emerald-700 dark:text-emerald-300">
+                    {Object.keys(selectedAnswers).length}
+                  </p>
+                </div>
+
+                <div className={`rounded-2xl border p-3 ${
+                  Math.max(0, roomQuestions.length - Object.keys(selectedAnswers).length) > 0
+                    ? 'border-amber-200 bg-amber-50/80 dark:border-amber-900/60 dark:bg-amber-950/40'
+                    : 'border-slate-200 bg-slate-50 dark:border-zinc-800 dark:bg-zinc-900/80'
+                }`}>
+                  <span className={`text-[10px] font-bold uppercase tracking-wider ${
+                    Math.max(0, roomQuestions.length - Object.keys(selectedAnswers).length) > 0
+                      ? 'text-amber-700 dark:text-amber-400'
+                      : 'text-slate-400 dark:text-zinc-500'
+                  }`}>
+                    Skipped
+                  </span>
+                  <p className={`mt-1 font-mono text-base font-extrabold ${
+                    Math.max(0, roomQuestions.length - Object.keys(selectedAnswers).length) > 0
+                      ? 'text-amber-800 dark:text-amber-300'
+                      : 'text-brand-950 dark:text-white'
+                  }`}>
+                    {Math.max(0, roomQuestions.length - Object.keys(selectedAnswers).length)}
+                  </p>
+                </div>
+              </div>
+
+              {/* Notice Warning Banner if Unanswered > 0 */}
+              {Math.max(0, roomQuestions.length - Object.keys(selectedAnswers).length) > 0 && (
+                <div className="mt-4 flex items-center gap-2.5 rounded-xl border border-amber-300/80 bg-amber-50 p-3 text-xs font-semibold text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300">
+                  <ShieldAlert className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                  <span>
+                    Notice: You have {Math.max(0, roomQuestions.length - Object.keys(selectedAnswers).length)} unanswered question(s). Skipped questions will be recorded as unattempted.
+                  </span>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-end">
+                <button
+                  type="button"
+                  onClick={() => setSubmitModalOpen(false)}
+                  className="w-full sm:w-auto rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-xs font-bold text-slate-700 transition hover:bg-slate-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800 cursor-pointer"
+                >
+                  ⬅️ Resume Exam
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSubmitModalOpen(false);
+                    handleFinalSubmit(false);
+                  }}
+                  className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-6 py-2.5 text-xs font-bold text-white shadow-md transition hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600 cursor-pointer"
+                >
+                  <CheckCircle2 className="h-4 w-4" /> Confirm &amp; Submit Session
+                </button>
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>

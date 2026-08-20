@@ -22,8 +22,8 @@ import {
   Moon,
   type LucideIcon,
 } from 'lucide-react';
-import type { StudentWithSession, ExamRoom, Question } from '@/lib/types';
-import { matchStudentToRoom, fetchStudentResponses, type ExamResponseDetail } from '@/lib/queries';
+import type { StudentWithSession, ExamRoom, Question, ExamSession } from '@/lib/types';
+import { matchStudentToRoom, fetchStudentResponses, fetchAllSessionsForStudent, getQuestionsForRoom, type ExamResponseDetail } from '@/lib/queries';
 import { initials, formatTimeAgo } from '@/lib/format';
 import { safeStorage } from '@/lib/storage';
 
@@ -91,22 +91,37 @@ export function StudentDashboard({
     return safeStorage.getJson<string[]>(notifStorageKey, []);
   });
 
+  const [studentSessions, setStudentSessions] = useState<ExamSession[]>([]);
+
+  useEffect(() => {
+    let isMounted = true;
+    if (student && student.id) {
+      fetchAllSessionsForStudent(student.id).then((data) => {
+        if (isMounted) setStudentSessions(data);
+      });
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, [student]);
+
   // 1. All active rooms matching candidate's department, year, semester
   const allEligibleRooms = useMemo(
     () => rooms.filter((r) => matchStudentToRoom(student, r) && r.status === 'active'),
     [rooms, student],
   );
 
-  // 2. Pending active rooms that student has NOT completed yet
+  // 2. Pending active rooms that student has NOT completed yet (Strict Per-Room Database Session Match)
   const pendingRooms = useMemo(() => {
     return allEligibleRooms.filter((r) => {
-      // Check if candidate completed this specific room session
-      const isCompleted =
-        student.status === 'completed' &&
-        ((student as any).room_id === r.id || (student.session_id && allEligibleRooms.length === 1));
-      return !isCompleted;
+      const sessionMatch = studentSessions.find((s) => s.room_id === r.id);
+      if (sessionMatch) {
+        return sessionMatch.status !== 'completed' && sessionMatch.status !== 'flagged';
+      }
+      const isStrictCompleted = student.room_id === r.id && (student.status === 'completed' || student.status === 'flagged');
+      return !isStrictCompleted;
     });
-  }, [allEligibleRooms, student]);
+  }, [allEligibleRooms, studentSessions, student]);
 
   const hasPendingQuiz = pendingRooms.length > 0;
   const hasHistory = student.status !== 'in_progress' && Boolean(student.session_id);
@@ -189,12 +204,35 @@ export function StudentDashboard({
   };
 
   async function handleOpenReviewModal(room?: ExamRoom) {
-    if (!student.session_id) return;
-    setReviewRoom(room || allEligibleRooms[0] || null);
+    const targetRoom = room || allEligibleRooms[0] || rooms[0] || null;
+    setReviewRoom(targetRoom);
     setReviewModalOpen(true);
     setReviewLoading(true);
+
     try {
-      const data = await fetchStudentResponses(student.session_id);
+      let data: ExamResponseDetail[] = [];
+      if (student.session_id) {
+        data = await fetchStudentResponses(student.session_id);
+      }
+
+      // Check safeStorage for local saved answers for student & room
+      const localKey = targetRoom ? `exora_answers_${student.id}_${targetRoom.id}` : null;
+      const savedAnswers = localKey ? safeStorage.getJson<Record<string, number>>(localKey, {}) : {};
+
+      // If database responses are missing or incomplete, augment with local saved answers
+      if ((!data || data.length === 0) && savedAnswers && Object.keys(savedAnswers).length > 0 && targetRoom) {
+        const roomQs = getQuestionsForRoom(questions, targetRoom);
+        data = roomQs
+          .filter((q) => savedAnswers[q.id] !== undefined && savedAnswers[q.id] !== null)
+          .map((q) => ({
+            session_id: student.session_id || 'local',
+            question_id: q.id,
+            selected_index: savedAnswers[q.id],
+            is_correct: savedAnswers[q.id] === q.correct_index,
+            question: q,
+          }));
+      }
+
       setReviewResponses(data);
     } catch (err) {
       console.error('Failed to load review responses', err);
@@ -884,21 +922,16 @@ export function StudentDashboard({
                     </p>
                   </div>
                 ) : (() => {
-                    // Compute review questions list
-                    const activeRoomQs = (questions || []).filter((q) => {
-                      if (!q.room_id) return false;
-                      const targetRoom = reviewRoom || rooms[0];
-                      if (!targetRoom) return false;
-                      const normRoomId = (targetRoom.id || '').toLowerCase();
-                      const normRoomCode = (targetRoom.room_code || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-                      const qRoom = q.room_id.toLowerCase();
-                      return qRoom === normRoomId || q.room_id.toLowerCase().replace(/[^a-z0-9]/g, '') === normRoomCode;
-                    });
+                    // Compute complete review questions list (Guarantee 100% of room questions are listed)
+                    const targetRoom = reviewRoom || rooms[0];
+                    const masterRoomQs = targetRoom ? getQuestionsForRoom(questions, targetRoom) : [];
 
-                    const hasResponses = reviewResponses && reviewResponses.length > 0;
-                    const hasRoomQs = activeRoomQs && activeRoomQs.length > 0;
+                    // Fallback to response questions if masterRoomQs is empty
+                    const allQsToDisplay: Question[] = masterRoomQs.length > 0
+                      ? masterRoomQs
+                      : (reviewResponses.map((r) => r.question).filter(Boolean) as Question[]);
 
-                    if (!hasResponses && !hasRoomQs) {
+                    if (allQsToDisplay.length === 0) {
                       return (
                         <div className="flex flex-col items-center justify-center py-12 text-center">
                           <BookOpen className="h-8 w-8 text-brand-300 dark:text-zinc-700" />
@@ -909,119 +942,110 @@ export function StudentDashboard({
                       );
                     }
 
-                    // Render question items
+                    // Map student responses by question_id AND local saved answers
+                    const localKey = targetRoom ? `exora_answers_${student.id}_${targetRoom.id}` : null;
+                    const savedAnswers = localKey ? safeStorage.getJson<Record<string, number>>(localKey, {}) : {};
+
+                    const respMap = new Map<string, number>();
+                    (reviewResponses || []).forEach((r) => {
+                      if (r.question_id && r.selected_index !== undefined && r.selected_index !== null && r.selected_index >= 0) {
+                        respMap.set(r.question_id, r.selected_index);
+                      }
+                      if (r.question?.id && r.selected_index !== undefined && r.selected_index !== null && r.selected_index >= 0) {
+                        respMap.set(r.question.id, r.selected_index);
+                      }
+                    });
+
+                    // Merge local saved answers
+                    if (savedAnswers) {
+                      Object.entries(savedAnswers).forEach(([qId, selIdx]) => {
+                        if (!respMap.has(qId) && typeof selIdx === 'number' && selIdx >= 0) {
+                          respMap.set(qId, selIdx);
+                        }
+                      });
+                    }
+
                     return (
                       <div className="space-y-4">
-                        {hasResponses
-                          ? reviewResponses.map((resp, idx) => {
-                              const q = resp.question;
-                              if (!q) return null;
-                              return (
-                                <div
-                                  key={resp.id || idx}
-                                  className="rounded-2xl border border-brand-200/80 bg-white p-5 space-y-3 dark:border-zinc-800 dark:bg-zinc-950/60"
-                                >
-                                  <div className="flex items-start justify-between gap-3">
-                                    <h4 className="text-xs font-bold text-brand-950 dark:text-white">
-                                      Q{idx + 1}. {q.text}
-                                    </h4>
-                                    <span className="shrink-0 rounded-md border border-brand-200 bg-brand-50 px-2 py-0.5 text-[10px] font-bold text-brand-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
-                                      {q.topic}
+                        {allQsToDisplay.map((q, idx) => {
+                          const selectedIndex = respMap.has(q.id) ? respMap.get(q.id) : undefined;
+                          const isSkipped = selectedIndex === undefined || selectedIndex === null || selectedIndex < 0;
+                          const isCorrect = !isSkipped && selectedIndex === q.correct_index;
+
+                          return (
+                            <div
+                              key={q.id || idx}
+                              className="rounded-2xl border border-brand-200/80 bg-white p-5 space-y-3 dark:border-zinc-800 dark:bg-zinc-950/60"
+                            >
+                              {/* Question Header with Status Badge */}
+                              <div className="flex items-start justify-between gap-3">
+                                <h4 className="text-xs font-bold text-brand-950 dark:text-white leading-snug">
+                                  Q{idx + 1}. {q.text}
+                                </h4>
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  <span className="rounded-md border border-brand-200 bg-brand-50 px-2 py-0.5 text-[10px] font-bold text-brand-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
+                                    {q.topic}
+                                  </span>
+                                  {isSkipped ? (
+                                    <span className="rounded-md border border-amber-300 bg-amber-50 px-2.5 py-0.5 text-[10px] font-extrabold text-amber-700 dark:border-amber-800/80 dark:bg-amber-950/60 dark:text-amber-300">
+                                      ⚠️ Skipped / Unanswered
                                     </span>
-                                  </div>
-
-                                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                                    {q.options.map((opt, optIdx) => {
-                                      const isStudentSelected = resp.selected_index === optIdx;
-                                      const isCorrectAnswer = q.correct_index === optIdx;
-
-                                      let cardStyle =
-                                        'border-brand-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 text-brand-900 dark:text-zinc-200';
-                                      let badgeText = null;
-
-                                      if (isStudentSelected && isCorrectAnswer) {
-                                        cardStyle =
-                                          'border-emerald-300 bg-emerald-50 text-emerald-950 dark:border-emerald-900/80 dark:bg-emerald-950/60 dark:text-emerald-200 font-bold';
-                                        badgeText = '✓ Your Choice (Correct)';
-                                      } else if (isStudentSelected && !isCorrectAnswer) {
-                                        cardStyle =
-                                          'border-rose-300 bg-rose-50 text-rose-950 dark:border-rose-900/80 dark:bg-rose-950/60 dark:text-rose-200 font-bold';
-                                        badgeText = '✗ Your Choice (Incorrect)';
-                                      } else if (isCorrectAnswer) {
-                                        cardStyle =
-                                          'border-emerald-300/80 bg-emerald-50/50 text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-300';
-                                        badgeText = 'Correct Answer';
-                                      }
-
-                                      return (
-                                        <div
-                                          key={optIdx}
-                                          className={`flex items-center justify-between rounded-xl border p-3 text-xs transition ${cardStyle}`}
-                                        >
-                                          <span>
-                                            {String.fromCharCode(65 + optIdx)}. {opt}
-                                          </span>
-                                          {badgeText && (
-                                            <span className="text-[10px] font-bold uppercase tracking-wider">
-                                              {badgeText}
-                                            </span>
-                                          )}
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
-                              );
-                            })
-                          : activeRoomQs.map((q, idx) => {
-                              return (
-                                <div
-                                  key={q.id || idx}
-                                  className="rounded-2xl border border-brand-200/80 bg-white p-5 space-y-3 dark:border-zinc-800 dark:bg-zinc-950/60"
-                                >
-                                  <div className="flex items-start justify-between gap-3">
-                                    <h4 className="text-xs font-bold text-brand-950 dark:text-white">
-                                      Q{idx + 1}. {q.text}
-                                    </h4>
-                                    <span className="shrink-0 rounded-md border border-brand-200 bg-brand-50 px-2 py-0.5 text-[10px] font-bold text-brand-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
-                                      {q.topic}
+                                  ) : isCorrect ? (
+                                    <span className="rounded-md border border-emerald-300 bg-emerald-50 px-2.5 py-0.5 text-[10px] font-extrabold text-emerald-700 dark:border-emerald-800/80 dark:bg-emerald-950/60 dark:text-emerald-300">
+                                      ✓ Correct
                                     </span>
-                                  </div>
-
-                                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                                    {q.options.map((opt, optIdx) => {
-                                      const isCorrectAnswer = q.correct_index === optIdx;
-
-                                      let cardStyle =
-                                        'border-brand-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 text-brand-900 dark:text-zinc-200';
-                                      let badgeText = null;
-
-                                      if (isCorrectAnswer) {
-                                        cardStyle =
-                                          'border-emerald-300 bg-emerald-50 text-emerald-950 dark:border-emerald-900/80 dark:bg-emerald-950/60 dark:text-emerald-200 font-bold';
-                                        badgeText = '✓ Correct Answer';
-                                      }
-
-                                      return (
-                                        <div
-                                          key={optIdx}
-                                          className={`flex items-center justify-between rounded-xl border p-3 text-xs transition ${cardStyle}`}
-                                        >
-                                          <span>
-                                            {String.fromCharCode(65 + optIdx)}. {opt}
-                                          </span>
-                                          {badgeText && (
-                                            <span className="text-[10px] font-bold uppercase tracking-wider">
-                                              {badgeText}
-                                            </span>
-                                          )}
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
+                                  ) : (
+                                    <span className="rounded-md border border-rose-300 bg-rose-50 px-2.5 py-0.5 text-[10px] font-extrabold text-rose-700 dark:border-rose-800/80 dark:bg-rose-950/60 dark:text-rose-300">
+                                      ✗ Incorrect
+                                    </span>
+                                  )}
                                 </div>
-                              );
-                            })}
+                              </div>
+
+                              {/* Options List */}
+                              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                {q.options.map((opt, optIdx) => {
+                                  const isStudentSelected = !isSkipped && selectedIndex === optIdx;
+                                  const isCorrectAnswer = q.correct_index === optIdx;
+
+                                  let cardStyle =
+                                    'border-brand-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 text-brand-900 dark:text-zinc-200';
+                                  let badgeText = null;
+
+                                  if (isStudentSelected && isCorrectAnswer) {
+                                    cardStyle =
+                                      'border-emerald-300 bg-emerald-50 text-emerald-950 dark:border-emerald-900/80 dark:bg-emerald-950/60 dark:text-emerald-200 font-bold';
+                                    badgeText = '✓ Your Choice (Correct)';
+                                  } else if (isStudentSelected && !isCorrectAnswer) {
+                                    cardStyle =
+                                      'border-rose-300 bg-rose-50 text-rose-950 dark:border-rose-900/80 dark:bg-rose-950/60 dark:text-rose-200 font-bold';
+                                    badgeText = '✗ Your Choice (Incorrect)';
+                                  } else if (isCorrectAnswer) {
+                                    cardStyle =
+                                      'border-emerald-300/80 bg-emerald-50/50 text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-300 font-semibold';
+                                    badgeText = isSkipped ? '✓ Correct Answer (Not Attempted)' : 'Correct Answer';
+                                  }
+
+                                  return (
+                                    <div
+                                      key={optIdx}
+                                      className={`flex items-center justify-between rounded-xl border p-3 text-xs transition ${cardStyle}`}
+                                    >
+                                      <span>
+                                        {String.fromCharCode(65 + optIdx)}. {opt}
+                                      </span>
+                                      {badgeText && (
+                                        <span className="text-[10px] font-bold uppercase tracking-wider">
+                                          {badgeText}
+                                        </span>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     );
                   })()}

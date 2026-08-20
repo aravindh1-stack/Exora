@@ -28,14 +28,15 @@ export async function fetchStudentsWithSessions(): Promise<StudentWithSession[]>
 
   return (students ?? []).map((s: Student) => {
     const latest = latestByStudent.get(s.id);
+    const isFlagged = s.status === 'flagged' || latest?.status === 'flagged';
     return {
       ...s,
       department: s.department ?? 'Computer Science',
       year: Number(s.year) || 1,
       semester: Number(s.semester) || 1,
-      status: latest?.status ?? 'in_progress',
-      score: latest ? Number(latest.score) : 0,
-      flag_reason: latest?.flag_reason ?? null,
+      status: isFlagged ? 'flagged' : (latest?.status ?? s.status ?? 'in_progress'),
+      score: isFlagged ? 0 : (latest ? Number(latest.score) : 0),
+      flag_reason: latest?.flag_reason ?? (s as any).flag_reason ?? (isFlagged ? 'Proctoring integrity violation' : null),
       completed_at: latest?.completed_at ?? null,
       session_id: latest?.id ?? null,
       room_id: latest?.room_id ?? null,
@@ -358,24 +359,13 @@ export async function fetchStudentResponses(sessionId: string): Promise<ExamResp
 export function getQuestionsForRoom(allQuestions: Question[], room: ExamRoom): Question[] {
   if (!allQuestions || allQuestions.length === 0 || !room) return [];
 
-  const normRoomId = (room.id || '').toLowerCase();
+  const normRoomId = (room.id || '').toLowerCase().trim();
   const normRoomCode = (room.room_code || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
-  let filtered = allQuestions.filter((q) => {
+  return allQuestions.filter((q) => {
     if (!q.room_id) return false;
-    const qRoom = q.room_id.toLowerCase();
-    return qRoom === normRoomId || q.room_id.toLowerCase().replace(/[^a-z0-9]/g, '') === normRoomCode;
+    const qRoomId = q.room_id.toLowerCase().trim();
+    const qRoomCode = q.room_id.toLowerCase().replace(/[^a-z0-9]/g, '');
+    return qRoomId === normRoomId || qRoomCode === normRoomCode;
   });
-
-  if (filtered.length === 0 && (room.title || room.department)) {
-    const roomTitle = (room.title || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-    const roomDept = (room.department || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-    filtered = allQuestions.filter((q) => {
-      if (!q.topic) return false;
-      const topicNorm = q.topic.toLowerCase().replace(/[^a-z0-9]/g, '');
-      return (roomTitle.includes(topicNorm) || roomDept.includes(topicNorm)) && topicNorm.length > 2;
-    });
-  }
-
-  return filtered;
 }

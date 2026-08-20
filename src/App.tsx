@@ -107,6 +107,11 @@ function App() {
 
   useEffect(() => {
     loadAllData();
+    // Auto-poll student roster & sessions every 4 seconds for live proctoring updates in admin view
+    const interval = setInterval(() => {
+      fetchStudentsWithSessions().then((sData) => setStudents(sData)).catch(() => {});
+    }, 4000);
+    return () => clearInterval(interval);
   }, [loadAllData]);
 
   const loadStudents = loadAllData;
